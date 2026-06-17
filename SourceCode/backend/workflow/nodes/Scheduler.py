@@ -39,6 +39,7 @@ class ScheduleItem(BaseModel):
     duration_minutes: int = 0
     cost: int = 0
     notes: Optional[str] = None
+    img_url: Optional[str] = None
 
 
 class DaySummary(BaseModel):
@@ -100,12 +101,36 @@ def calculate_duration(start: str, end: str) -> int:
     return end_min - start_min
 
 
+COMPANION_MAP = {
+    "gia đình": "Family",
+    "trẻ nhỏ": "Kids",
+    "trẻ em": "Kids",
+    "người già": "Elderly",
+    "lớn tuổi": "Elderly",
+    "cặp đôi": "Couples",
+    "bạn bè": "Friends",
+    "một mình": "Solo",
+    "nhóm": "Group"
+}
+
 def matches_suitability(item: Dict, companion_types: List[str]) -> bool:
     """Check if item is suitable for the given companion types."""
-    suitability = item.get("suitabilityFor", [])
+    if not companion_types:
+        return True
+    suitability = item.get("suitability_for", item.get("suitabilityFor", []))
     if not suitability:
         return True
-    return any(ct in suitability for ct in companion_types)
+    
+    # Translate Vietnamese tags to English
+    translated_ct = []
+    for ct in companion_types:
+        ct_lower = ct.lower()
+        for vi, en in COMPANION_MAP.items():
+            if vi in ct_lower:
+                translated_ct.append(en)
+        translated_ct.append(ct)
+        
+    return any(ct in suitability for ct in translated_ct)
 
 
 def select_best_activity(
@@ -114,6 +139,7 @@ def select_best_activity(
     budget_available: int,
     companion_types: List[str],
     already_selected_ids: set,
+    group_size: int = 1
 ) -> Optional[Dict]:
     """Select best activity that fits time, budget, and suitability."""
     candidates = []
@@ -122,9 +148,13 @@ def select_best_activity(
         activity_id = activity.get("_id") or activity.get("name")
         if activity_id in already_selected_ids:
             continue
+            
+        if activity.get("name") == "string" or activity.get("locationId") == "string":
+            continue
         
-        duration = activity.get("estimatedDuration", 60)
-        cost = activity.get("estimatedPrice", 0)
+        duration = activity.get("estimatedDuration", activity.get("estimated_duration_minutes", 60))
+        base_cost = activity.get("estimated_cost", activity.get("estimatedPrice", activity.get("cost", 0)))
+        cost = base_cost * group_size
         
         # Check constraints
         if duration > time_available_minutes:
@@ -135,7 +165,8 @@ def select_best_activity(
             continue
         
         # Score by suitability and cost efficiency
-        suitability_score = sum(1 for ct in companion_types if ct in activity.get("suitabilityFor", []))
+        item_suitability = activity.get("suitability_for", activity.get("suitabilityFor", []))
+        suitability_score = sum(1 for ct in companion_types if ct in item_suitability)
         cost_efficiency = (1 - cost / max(budget_available, 1)) if cost > 0 else 0.5
         
         score = (suitability_score * 2) + cost_efficiency
@@ -163,6 +194,8 @@ def create_daily_schedule(
     travel_preferences: Dict,
     is_arrival_day: bool = False,
     is_departure_day: bool = False,
+    total_days: int = 1,
+    start_location: str = "Hà Nội",
 ) -> DaySchedule:
     """Create schedule for a single day."""
     
@@ -187,7 +220,17 @@ def create_daily_schedule(
     current_time_min = time_to_minutes("06:00")  # Start at 6 AM
     end_time_min = time_to_minutes("22:00")  # End at 10 PM
     
-    daily_budget = constraints.get("travel_budget", 1_000_000) / constraints.get("group_size", 1)
+    try:
+        travel_budget_val = int(constraints.get("travel_budget", 1_000_000))
+    except (ValueError, TypeError):
+        travel_budget_val = 1_000_000
+        
+    try:
+        group_size_val = int(constraints.get("group_size", 1))
+    except (ValueError, TypeError):
+        group_size_val = 1
+        
+    daily_budget = travel_budget_val / max(total_days, 1)
     spent_today = 0
     companion_types = travel_preferences.get("companion_type", [])
     already_selected = set()
@@ -204,10 +247,12 @@ def create_daily_schedule(
             "type": "transportation",
             "name": transport.get("name", "Transport to destination"),
             "location": transport.get("to_ward", "Destination"),
+            "locationId": transport.get("_id"),
             "description": f"Travel from {transport.get('from_ward')} to {transport.get('to_ward')}",
             "duration_minutes": calculate_duration(departure_time, arrival_time),
-            "cost": transport.get("price_per_person", 0),
-            "notes": "Bring snacks and stay hydrated"
+            "cost": transport.get("price_per_person", 0) * group_size_val,
+            "notes": "Bring snacks and stay hydrated",
+            "img_url": transport.get("img_url", None)
         }
         items.append(item)
         spent_today += item["cost"]
@@ -217,7 +262,7 @@ def create_daily_schedule(
     # ── Departure Day ────────────────────────────────────────────────────────
     elif is_departure_day and transportations:
         # Find return transport
-        return_transport = next((t for t in transportations if t.get("to_ward") == "Hà Nội"), transportations[-1])
+        return_transport = next((t for t in transportations if t.get("to_ward") == start_location), transportations[-1])
         departure_time = return_transport.get("schedule", [{}])[0].get("departure", "17:00") if return_transport.get("schedule") else "17:00"
         arrival_time = return_transport.get("schedule", [{}])[0].get("arrival", "20:00") if return_transport.get("schedule") else "20:00"
         
@@ -232,10 +277,13 @@ def create_daily_schedule(
                 "type": "activity",
                 "name": activity.get("name", "Activity"),
                 "location": activity.get("ward_name", "Location"),
+                "locationId": activity.get("_id"),
                 "description": activity.get("description", ""),
                 "duration_minutes": calculate_duration(minutes_to_time(current_time_min), "12:00"),
-                "cost": activity.get("estimatedPrice", 0),
-                "notes": "Last activity before departure"
+                "cost": activity.get("estimated_cost", activity.get("estimatedPrice", activity.get("cost", 0))) * group_size_val,
+                "notes": "Last activity before departure",
+                "img_url": activity.get("img_url", None),
+                "suitability": activity.get("suitability_for", activity.get("suitabilityFor", []))
             }
             items.append(item)
             spent_today += item["cost"]
@@ -250,7 +298,8 @@ def create_daily_schedule(
             "location": "Local Restaurant",
             "description": "Final meal before departure",
             "duration_minutes": 60,
-            "cost": 150_000,
+            "cost": 150_000 * group_size_val,
+            "img_url": None
         }
         items.append(item)
         spent_today += item["cost"]
@@ -261,11 +310,13 @@ def create_daily_schedule(
             "time_end": arrival_time,
             "type": "transportation",
             "name": return_transport.get("name", "Transport back"),
-            "location": return_transport.get("to_ward", "Hà Nội"),
+            "location": return_transport.get("to_ward", start_location),
+            "locationId": return_transport.get("_id"),
             "description": f"Return trip to {return_transport.get('to_ward')}",
             "duration_minutes": calculate_duration(departure_time, arrival_time),
-            "cost": return_transport.get("price_per_person", 0),
-            "notes": "Check-out before departure"
+            "cost": return_transport.get("price_per_person", 0) * group_size_val,
+            "notes": "Check-out before departure",
+            "img_url": return_transport.get("img_url", None)
         }
         items.append(item)
         spent_today += item["cost"]
@@ -276,93 +327,122 @@ def create_daily_schedule(
         day_schedule["title"] = f"📍 Day {day_num} - Exploration"
         budget_left = daily_budget - spent_today
         
+        # Parse travel pace for dynamic scheduling
+        paces = [p.lower() for p in travel_preferences.get("travel_pace", [])]
+        is_relaxed = any("thong thả" in p or "chậm" in p or "chill" in p for p in paces)
+        is_fast = any("nhanh" in p or "năng động" in p for p in paces)
+        
+        rest_duration = 60 if is_relaxed else 15 if is_fast else 30
+        
         # Breakfast
+        breakfast_end = "08:00" if is_relaxed else "07:30"
         item = {
             "time_start": minutes_to_time(current_time_min),
-            "time_end": "07:30",
+            "time_end": breakfast_end,
             "type": "meal",
             "name": "Breakfast",
             "location": "Hotel/Accommodation",
-            "cost": 100_000,
+            "cost": 100_000 * group_size_val,
+            "img_url": None
         }
         items.append(item)
         spent_today += item["cost"]
-        current_time_min = time_to_minutes("07:30")
+        current_time_min = time_to_minutes(breakfast_end)
         budget_left -= item["cost"]
         
-        # Morning activity (high energy)
-        time_for_activity = 150  # 2.5 hours
-        activity = select_best_activity(activities, time_for_activity, int(budget_left * 0.4), companion_types, already_selected)
+        had_lunch = False
+        had_dinner = False
         
-        if activity:
-            item = {
-                "time_start": minutes_to_time(current_time_min),
-                "time_end": minutes_to_time(current_time_min + time_for_activity),
-                "type": "activity",
-                "name": activity.get("name", "Activity"),
-                "location": activity.get("ward_name", "Location"),
-                "description": activity.get("description", ""),
-                "duration_minutes": time_for_activity,
-                "cost": activity.get("estimatedPrice", 0),
-            }
-            items.append(item)
-            spent_today += item["cost"]
-            already_selected.add(activity.get("_id") or activity.get("name"))
-            current_time_min += time_for_activity
-            budget_left -= item["cost"]
-            day_schedule["day_summary"]["highlights"].append(activity.get("name", ""))
-        
-        # Lunch
-        item = {
-            "time_start": minutes_to_time(current_time_min),
-            "time_end": minutes_to_time(current_time_min + 90),
-            "type": "meal",
-            "name": "Lunch - Local Cuisine",
-            "location": "Local Restaurant",
-            "cost": 120_000,
-        }
-        items.append(item)
-        spent_today += item["cost"]
-        current_time_min += 90
-        budget_left -= item["cost"]
-        
-        # Afternoon activity (moderate energy)
-        time_for_activity = 120  # 2 hours
-        activity = select_best_activity(activities, time_for_activity, int(budget_left * 0.4), companion_types, already_selected)
-        
-        if activity:
-            item = {
-                "time_start": minutes_to_time(current_time_min),
-                "time_end": minutes_to_time(current_time_min + time_for_activity),
-                "type": "activity",
-                "name": activity.get("name", "Activity"),
-                "location": activity.get("ward_name", "Location"),
-                "description": activity.get("description", ""),
-                "duration_minutes": time_for_activity,
-                "cost": activity.get("estimatedPrice", 0),
-            }
-            items.append(item)
-            spent_today += item["cost"]
-            already_selected.add(activity.get("_id") or activity.get("name"))
-            current_time_min += time_for_activity
-            budget_left -= item["cost"]
-            day_schedule["day_summary"]["highlights"].append(activity.get("name", ""))
-        
-        # Rest time before dinner
-        current_time_min += 60  # 1 hour rest
-        
-        # Dinner
-        item = {
-            "time_start": minutes_to_time(current_time_min),
-            "time_end": minutes_to_time(current_time_min + 90),
-            "type": "meal",
-            "name": "Dinner - Local Specialties",
-            "location": "Local Restaurant",
-            "cost": 150_000,
-        }
-        items.append(item)
-        spent_today += item["cost"]
-        current_time_min += 90
+        # Loop to fill the day dynamically until dinner is scheduled
+        while current_time_min < time_to_minutes("21:00") and not had_dinner:
+            # Check for Lunch (schedule if it's past 11:30 and haven't eaten)
+            if not had_lunch and current_time_min >= time_to_minutes("11:30"):
+                lunch_end = current_time_min + (90 if is_relaxed else 60)
+                item = {
+                    "time_start": minutes_to_time(current_time_min),
+                    "time_end": minutes_to_time(lunch_end),
+                    "type": "meal",
+                    "name": "Lunch - Local Cuisine",
+                    "location": "Local Restaurant",
+                    "cost": 120_000 * group_size_val,
+                    "img_url": None
+                }
+                items.append(item)
+                spent_today += item["cost"]
+                budget_left -= item["cost"]
+                current_time_min = lunch_end
+                had_lunch = True
+                
+                # Rest after lunch
+                current_time_min += rest_duration
+                continue
+                
+            # Check for Dinner (schedule if it's past 18:00 and haven't eaten)
+            if not had_dinner and current_time_min >= time_to_minutes("18:00"):
+                dinner_end = current_time_min + (120 if is_relaxed else 90)
+                item = {
+                    "time_start": minutes_to_time(current_time_min),
+                    "time_end": minutes_to_time(dinner_end),
+                    "type": "meal",
+                    "name": "Dinner - Local Specialties",
+                    "location": "Local Restaurant",
+                    "cost": 150_000 * group_size_val,
+                    "img_url": None
+                }
+                items.append(item)
+                spent_today += item["cost"]
+                budget_left -= item["cost"]
+                current_time_min = dinner_end
+                had_dinner = True
+                break
+            
+            # Try to schedule an activity
+            if not had_lunch:
+                time_until_next_event = time_to_minutes("12:00") - current_time_min
+            else:
+                time_until_next_event = time_to_minutes("18:30") - current_time_min
+                
+            # If time is too short for any activity, skip to next meal time
+            if time_until_next_event < 45:
+                current_time_min += time_until_next_event
+                continue
+                
+            activity = select_best_activity(activities, time_until_next_event, int(budget_left * 0.5), companion_types, already_selected, group_size_val)
+            
+            if activity:
+                dur = activity.get("estimatedDuration", activity.get("estimated_duration_minutes", 120))
+                # Adjust duration based on pace
+                if is_relaxed: dur = int(dur * 1.2)
+                elif is_fast: dur = int(dur * 0.8)
+                
+                # Cap duration to fit before the next event
+                dur = min(dur, time_until_next_event)
+                
+                item = {
+                    "time_start": minutes_to_time(current_time_min),
+                    "time_end": minutes_to_time(current_time_min + dur),
+                    "type": "activity",
+                    "name": activity.get("name", "Activity"),
+                    "location": activity.get("ward_name", "Location"),
+                    "locationId": activity.get("_id"),
+                    "description": activity.get("description", ""),
+                    "duration_minutes": dur,
+                    "cost": activity.get("estimated_cost", activity.get("estimatedPrice", activity.get("cost", 0))) * group_size_val,
+                    "img_url": activity.get("img_url", None),
+                    "suitability": activity.get("suitability_for", activity.get("suitabilityFor", []))
+                }
+                items.append(item)
+                spent_today += item["cost"]
+                already_selected.add(activity.get("_id") or activity.get("name"))
+                budget_left -= item["cost"]
+                current_time_min += dur
+                day_schedule["day_summary"]["highlights"].append(activity.get("name", ""))
+                
+                # Add rest after activity
+                current_time_min += rest_duration
+            else:
+                # No affordable/suitable activity fits, skip to next event time
+                current_time_min += time_until_next_event
     
     # ── Accommodation ────────────────────────────────────────────────────────
     if accommodations and day_num <= len(accommodations):
@@ -373,8 +453,10 @@ def create_daily_schedule(
             "type": "accommodation",
             "name": accommodation.get("name", "Hotel"),
             "location": accommodation.get("ward_name", "Location"),
-            "cost": accommodation.get("estimatedPrice", 0),
-            "notes": f"Check-in at 15:00, Check-out at 10:00"
+            "locationId": accommodation.get("_id"),
+            "cost": accommodation.get("price_per_night", accommodation.get("estimatedPrice", 0)) * group_size_val,
+            "notes": f"Check-in at 15:00, Check-out at 10:00",
+            "img_url": accommodation.get("img_url", None)
         }
         items.append(item)
         spent_today += item["cost"]
@@ -444,7 +526,7 @@ def apply_validation_feedback(
             if activities:
                 activities_sorted = sorted(
                     activities,
-                    key=lambda a: a.get("estimatedPrice", a.get("cost", 0)),
+                    key=lambda a: a.get("estimated_cost", a.get("estimatedPrice", a.get("cost", 0))),
                     reverse=True
                 )
                 removed = activities_sorted[0]
@@ -512,6 +594,30 @@ def scheduler_node(state: dict) -> dict:
     
     transportations = state.get("transportations", [])
     
+    def _to_dict(obj):
+        if isinstance(obj, dict): return obj
+        try:
+            return obj.model_dump()
+        except AttributeError:
+            pass
+        try:
+            return obj.dict()
+        except AttributeError:
+            pass
+        try:
+            return dict(obj)
+        except (TypeError, ValueError):
+            pass
+        try:
+            return vars(obj)
+        except TypeError:
+            pass
+        return obj
+        
+    activities = [_to_dict(a) for a in activities]
+    accommodations = [_to_dict(a) for a in accommodations]
+    transportations = [_to_dict(t) for t in transportations]
+    
     # ── Apply validation feedback if present (feedback loop iteration) ────────
     feedback = state.get("validation_feedback", [])
     if feedback:
@@ -526,6 +632,8 @@ def scheduler_node(state: dict) -> dict:
     # Extract trip dates
     start_date_str = trip_metadata.get("start_date", "2026-06-01")
     total_days = int(trip_metadata.get("total_days", 3))
+    start_location_raw = trip_metadata.get("start_location", "Hà Nội")
+    start_location = start_location_raw.split(",")[0].strip() if start_location_raw else "Hà Nội"
     
     try:
         start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
@@ -552,6 +660,8 @@ def scheduler_node(state: dict) -> dict:
             travel_preferences=travel_preferences,
             is_arrival_day=is_arrival,
             is_departure_day=is_departure,
+            total_days=total_days,
+            start_location=start_location,
         )
         
         scheduling.append(day_schedule)

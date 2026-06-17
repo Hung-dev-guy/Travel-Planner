@@ -7,7 +7,7 @@ using Google Generative AI (Gemini), with all output in Vietnamese.
 Process:
 1. Extract and format trip data from state
 2. Create Vietnamese prompts for different sections
-3. Call Gemini API to generate natural language
+3. Call Gemini API to generate natural language 
 4. Format responses into user-friendly structure
 5. Return complete trip plan in Vietnamese
 
@@ -18,21 +18,19 @@ Output Sections (Tiếng Việt):
 - Thông tin hậu cần (Logistics): Practical info
 - Gợi ý (Recommendations): Tips and improvements
 """
-
+import re
 import os
 import logging
+import json
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime
-
-# Import Google Generative AI
-try:
-    import google.generativeai as genai
-except ImportError:
-    genai = None
+from pydantic import BaseModel, Field
+from google import genai
+import dotenv 
+dotenv.load_dotenv()   
 
 logger = logging.getLogger(__name__)
-
 
 # ============================================================================
 # DATA MODELS
@@ -49,6 +47,7 @@ class TripData:
     preferences: Dict[str, Any]
     validation_score: float
     validation_feedback: str
+    category_scores: Dict[str, float]
     schedule: List[Dict[str, Any]]
     accommodations: List[Dict[str, Any]]
     activities: List[Dict[str, Any]]
@@ -59,10 +58,18 @@ class TripData:
 @dataclass
 class ResponseSection:
     """Single section of generated response."""
-    title_en: str
     title_vi: str
     content: str
     section_type: str  # summary, itinerary, costs, logistics, recommendations
+
+
+class FullTripResponse(BaseModel):
+    """Pydantic model for structured Gemini output"""
+    summary: str = Field(description="Tóm tắt chuyến đi 2-3 câu")
+    itinerary: str = Field(description="Lịch trình chi tiết từng ngày dạng markdown, viết súc tích")
+    costs: str = Field(description="Phân tích chi phí và ngân sách ngắn gọn")
+    logistics: str = Field(description="Thông tin hậu cần, di chuyển, visa")
+    recommendations: str = Field(description="Lời khuyên và mẹo du lịch, gạch đầu dòng")
 
 
 # ============================================================================
@@ -71,38 +78,60 @@ class ResponseSection:
 
 class TripDataFormatter:
     """Extract and structure trip data from workflow state."""
-    
+    @staticmethod
+    def parse_budget(budget_val: Any) -> float:
+        if isinstance(budget_val, (int, float)):
+            return float(budget_val)
+        if not budget_val:
+            return 0.0
+            
+        s = str(budget_val).lower().strip()
+        # Extract the first sequence of digits/decimals
+        nums = re.findall(r"[\d\.]+", s)
+        if not nums:
+            return 0.0
+            
+        val = float(nums[0])   
+        # Handle Vietnamese text multipliers
+        if "triệu" in s:
+            val *= 1_000_000
+        elif "trăm" in s and "nghìn" in s:
+            val *= 100_000
+        elif "k" in s or "nghìn" in s or "ngàn" in s:
+            val *= 1_000         
+        return val
+
     @staticmethod
     def extract_from_state(state: Dict[str, Any]) -> Optional[TripData]:
         """Extract trip data from workflow state."""
-        try:
-            # Handle both new and old state formats
-            destination = state.get("destination") or state.get("trip_metadata", {}).get("destination", "Unknown")
-            starting_location = state.get("starting_location", "Unknown")
-            duration_days = state.get("duration_days") or state.get("trip_metadata", {}).get("total_days", 0)
-            travelers = state.get("travelers") or state.get("constraints", {}).get("group_size", 1)
-            budget = float(state.get("total_budget") or state.get("constraints", {}).get("travel_budget", 0))
-            
-            # Get all required fields from state
-            trip_data = TripData(
-                destination=destination,
-                starting_location=starting_location,
-                duration_days=duration_days,
-                travelers=travelers,
-                budget=budget,
-                preferences=state.get("preferences", state.get("travel_preferences", {})),
-                validation_score=state.get("validation_score", state.get("validation", {}).get("overall_score", 0)),
-                validation_feedback=state.get("validation_feedback", state.get("validation", {}).get("status", "")),
-                schedule=state.get("schedule", state.get("scheduling", [])),
-                accommodations=state.get("accommodations", []),
-                activities=state.get("activities", []),
-                transportation=state.get("transportation", []),
-                costs=state.get("costs", {})
-            )
-            return trip_data
-        except Exception as e:
-            logger.error(f"Error extracting trip data: {e}")
-            return None
+        # Handle both new and old state formats
+        destination = state.get("destination") or state.get("trip_metadata", {}).get("destination", "Unknown")
+        starting_location = state.get("starting_location") or state.get("trip_metadata", {}).get("start_location", "Unknown")
+        duration_days = state.get("duration_days") or state.get("trip_metadata", {}).get("total_days", 0)
+        travelers = state.get("travelers") or state.get("constraints", {}).get("group_size", 1)
+        
+        budget_raw = state.get("total_budget") or state.get("constraints", {}).get("travel_budget", 0)
+        budget = TripDataFormatter.parse_budget(budget_raw)
+        
+        # Get all required fields from state
+        trip_data = TripData(
+            destination=destination,
+            starting_location=starting_location,
+            duration_days=duration_days,
+            travelers=travelers,
+            budget=budget,
+            preferences=state.get("preferences", state.get("travel_preferences", {})),
+            validation_score=state.get("validation_score", state.get("validation", {}).get("overall_score", 0)),
+            validation_feedback=state.get("validation_feedback", state.get("validation", {}).get("status", "")),
+            category_scores=state.get("validation", {}).get("category_scores", {}),
+            schedule=state.get("schedule", state.get("scheduling", [])),
+            accommodations=state.get("accommodations", []),
+            activities=state.get("activities", []),
+            transportation=state.get("transportation", []),
+            costs=state.get("costs", {})
+        )
+        return trip_data
+
     
     @staticmethod
     def format_daily_schedule(day_num: int, activities: List[Dict]) -> str:
@@ -140,125 +169,52 @@ class TripDataFormatter:
 # ============================================================================
 
 class PromptEngine:
-    """Generate Vietnamese prompts for different response sections."""
-    
+    """Generate Vietnamese prompts for response sections."""
     @staticmethod
-    def summary_prompt(trip_data: TripData) -> str:
-        """Prompt for trip summary."""
+    def full_trip_prompt(trip_data: TripData) -> str:
+        """Prompt to generate all 5 sections in one API call."""
         travel_style = trip_data.preferences.get('travel_style', 'cân bằng')
         if isinstance(travel_style, list):
             travel_style = ', '.join(travel_style) if travel_style else 'cân bằng'
-        
+            
         activity_types = trip_data.preferences.get('activity_types', [])
         if isinstance(activity_types, list):
             activity_types = ', '.join(activity_types) if activity_types else 'đa dạng'
-        
-        return f"""Hãy viết một tóm tắt ngắn gọn (2-3 câu) về chuyến đi này bằng tiếng Việt:
-        
-        Từ: {trip_data.starting_location}
-        Đến: {trip_data.destination}
-        Thời gian: {trip_data.duration_days} ngày
-        Số du khách: {trip_data.travelers}
-        Ngân sách: {trip_data.budget:,.0f} VND
-        Phong cách du lịch: {travel_style}
-        Loại hoạt động: {activity_types}
 
-        Hãy tạo một tóm tắt hấp dẫn và chuyên nghiệp về chuyến đi này."""
-
-    @staticmethod
-    def itinerary_prompt(trip_data: TripData) -> str:
-        """Prompt for detailed itinerary."""
-        schedule_text = "\n".join([
-            PromptEngine._format_day(day) for day in trip_data.schedule
-        ]) if trip_data.schedule else "Lịch trình còn được hoàn thiện"
-        
-        return f"""Hãy viết một lịch trình chi tiết cho chuyến đi {trip_data.duration_days} ngày từ {trip_data.starting_location} đến {trip_data.destination} bằng tiếng Việt:
-
-        Lịch trình dự kiến:
-        {schedule_text}
-
-        Vui lòng:
-        1. Mô tả chi tiết từng ngày
-        2. Gợi ý các hoạt động hấp dẫn tại địa phương
-        3. Đề cập đến các điểm tham quan nổi tiếng
-        4. Tính toán thời gian di chuyển hợp lý"""
-
-    @staticmethod
-    def costs_prompt(trip_data: TripData) -> str:
-        """Prompt for cost analysis."""
-        costs_text = PromptEngine._format_costs(trip_data.costs)
-        
-        return f"""Phân tích chi phí cho chuyến đi {trip_data.duration_days} ngày tới {trip_data.destination} bằng tiếng Việt:
-
-        Ngân sách tổng: {trip_data.budget:,.0f} VND
-        Chi tiết:
-        {costs_text}
-
-        Vui lòng:
-        1. Phân tích từng khoản chi phí
-        2. Gợi ý cách tiết kiệm chi phí hợp lý
-        3. Cảnh báo nếu chi phí cao hơn ngân sách
-        4. Đề xuất các lựa chọn thay thế rẻ hơn nếu cần"""
-
-    @staticmethod
-    def logistics_prompt(trip_data: TripData) -> str:
-        """Prompt for logistics information."""
-        travel_style = trip_data.preferences.get('travel_style', 'cân bằng')
-        if isinstance(travel_style, list):
-            travel_style = ', '.join(travel_style) if travel_style else 'cân bằng'
-        
-        return f"""Cung cấp thông tin hậu cần quan trọng cho chuyến đi đến {trip_data.destination} bằng tiếng Việt:
-
-        Thời gian: {trip_data.duration_days} ngày
-        Loại du lịch: {travel_style}
-        Số du khách: {trip_data.travelers}
-
-        Vui lòng bao gồm:
-        1. Yêu cầu hộ chiếu/visa
-        2. Mùa du lịch tốt nhất
-        3. Tiền tệ và thanh toán
-        4. An toàn du lịch
-        5. Giao thông nội địa
-        6. Nước sạch và sức khỏe
-        7. Thông tin liên hệ khẩn cấp"""
-
-    @staticmethod
-    def recommendations_prompt(trip_data: TripData) -> str:
-        """Prompt for recommendations and tips."""
         validation_msg = f"Điểm đánh giá: {trip_data.validation_score:.0f}%\nTrạng thái: {trip_data.validation_feedback}"
-        travel_style = trip_data.preferences.get('travel_style', 'cân bằng')
-        if isinstance(travel_style, list):
-            travel_style = ', '.join(travel_style) if travel_style else 'cân bằng'
         
-        return f"""Đưa ra các gợi ý và lời khuyên cho chuyến đi đến {trip_data.destination} bằng tiếng Việt:
+        # Compress input context to reduce token usage
+        compressed_schedule = []
+        for day in trip_data.schedule:
+            compressed_schedule.append(f"--- Ngày {day.get('day', 1)} ---")
+            for item in day.get('activities', []):
+                compressed_schedule.append(f"- {item.get('time', 'N/A')}: {item.get('name', 'Hoạt động')}")
+        schedule_text = "\n".join(compressed_schedule) if compressed_schedule else "Chưa có lịch trình chi tiết"
+        costs_text = PromptEngine._format_costs(trip_data.costs)
 
-        Thông tin chuyến đi:
-        - Số du khách: {trip_data.travelers}
-        - Loại du lịch: {travel_style}
-        - Đánh giá: {validation_msg}
-
-        Vui lòng đề xuất:
-        1. Cách chuẩn bị tốt nhất trước chuyến đi
-        2. Những đồ vật cần thiết mang theo
-        3. Các mẹo du lịch địa phương
-        4. Trải nghiệm không nên bỏ lỡ
-        5. Cảnh báo về những rủi ro tiềm ẩn"""
-
-    @staticmethod
-    def _format_day(day_data: Dict[str, Any]) -> str:
-        """Format a single day's schedule."""
-        day_num = day_data.get("day", 1)
-        activities = day_data.get("activities", [])
-        accommodation = day_data.get("accommodation", "N/A")
+        return f"""Dựa trên dữ liệu rút gọn dưới đây, hãy tạo một kế hoạch chuyến đi hoàn chỉnh bằng tiếng Việt.
         
-        result = f"Ngày {day_num}:\n"
-        result += f"  Nơi ở: {accommodation}\n"
-        for activity in activities:
-            time = activity.get("time", "N/A")
-            name = activity.get("name", "Hoạt động")
-            result += f"  {time}: {name}\n"
-        return result
-    
+            [THÔNG TIN CHUYẾN ĐI]
+            Từ: {trip_data.starting_location}
+            Đến: {trip_data.destination}
+            Thời gian: {trip_data.duration_days} ngày
+            Số du khách: {trip_data.travelers}
+            Ngân sách: {trip_data.budget:,.0f} VND
+            Phong cách: {travel_style}
+            Loại hoạt động: {activity_types}
+            Đánh giá lịch trình: {validation_msg}
+
+            [LỊCH TRÌNH DỰ KIẾN]
+            {schedule_text}
+
+            [CHI PHÍ DỰ KIẾN]
+            {costs_text}
+
+            Yêu cầu khắt khe:
+            1. Trả về đúng định dạng JSON theo cấu trúc yêu cầu.
+            2. Cực kỳ ngắn gọn, súc tích, đi thẳng vào vấn đề. Sử dụng gạch đầu dòng (bullet points) nhiều nhất có thể.
+            3. KHÔNG viết các đoạn văn dài dòng không cần thiết để tiết kiệm token."""
+
     @staticmethod
     def _format_costs(costs: Dict[str, float]) -> str:
         """Format costs for prompt."""
@@ -271,54 +227,74 @@ class PromptEngine:
 
 
 # ============================================================================
-# LLM GENERATOR (GOOGLE GENERATIVE AI)
+# LLM GENERATOR 
 # ============================================================================
+from workflow.models.llm import DEFAULT_MODEL
 
 class LLMGenerator:
     """Generate responses using Google Generative AI (Gemini)."""
-    
     def __init__(self):
         """Initialize Gemini API."""
         self.api_key = os.getenv("GOOGLE_API_KEY", "")
-        self.model_name = "gemini-1.5-flash"
+        self.model_name = DEFAULT_MODEL
         self.client = None
         
         if genai and self.api_key:
             try:
-                genai.configure(api_key=self.api_key)
-                self.client = genai
+                self.client = genai.Client(api_key=self.api_key)
                 logger.info(f"Gemini API initialized with {self.model_name}")
             except Exception as e:
                 logger.error(f"Failed to initialize Gemini: {e}")
         else:
             logger.warning("Gemini API not available or API key missing")
     
-    def generate(self, prompt: str, temperature: float = 0.7, max_tokens: int = 500) -> Optional[str]:
-        """Generate text using Gemini API."""
-        if not self.client:
-            logger.error("Gemini client not initialized")
-            return None
+    def generate_full_response(self, prompt: str, temperature: float = 0.5) -> Optional[Dict[str, str]]:
+        """Generate the full JSON response using structured output."""
+        import time
+        max_retries = 5
+        attempts = 0
         
-        try:
-            model = self.client.GenerativeModel(self.model_name)
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.types.GenerationConfig(
-                    temperature=temperature,
-                    max_output_tokens=max_tokens,
-                    top_p=0.95,
-                    top_k=40
+        while attempts < max_retries:
+            try:
+                response = self.client.models.generate_content(
+                    model=self.model_name,
+                    contents=prompt,
+                    config=genai.types.GenerateContentConfig(
+                        system_instruction="Bạn là trợ lý du lịch AI. Trả lời cực kỳ ngắn gọn, súc tích, đi thẳng vào vấn đề. Sử dụng gạch đầu dòng (bullet points) thay vì viết các đoạn văn dài dòng không cần thiết.",
+                        temperature=temperature,
+                        max_output_tokens=8192,
+                        top_p=0.95,
+                        top_k=40,
+                        response_mime_type="application/json",
+                        response_schema=FullTripResponse
+                    )
                 )
-            )
+                break # Success!
+            except Exception as e:
+                attempts += 1
+                error_str = str(e)
+                logger.error(f"Generate Answer API Error: {error_str}")
+                
+                if "Quota exceeded" in error_str or "RESOURCE_EXHAUSTED" in error_str:
+                    logger.error("Hết quota API. Ngưng retry.")
+                    raise e
+                    
+                if attempts < max_retries and ("429" in error_str or "503" in error_str):
+                    wait_time = 3 * attempts
+                    logger.warning(f"API quá tải (429/503). Đợi {wait_time}s trước khi thử lại ({attempts}/{max_retries})...")
+                    time.sleep(wait_time)
+                else:
+                    if attempts >= max_retries:
+                        logger.error("Đã hết số lần retry. Bỏ cuộc!")
+                    raise e
+                    
+        if response and response.text:
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text.strip("```json").strip("```").strip()
+            return json.loads(text)
+        return None
             
-            if response and response.text:
-                logger.info(f"Generated {len(response.text)} characters")
-                return response.text.strip()
-            return None
-            
-        except Exception as e:
-            logger.error(f"Error generating with Gemini: {e}")
-            return None
 
 
 # ============================================================================
@@ -328,62 +304,111 @@ class LLMGenerator:
 class ResponseFormatter:
     """Format generated responses into user-friendly structure."""
     
-    @staticmethod
-    def format_summary_section(content: str) -> ResponseSection:
-        """Format summary section."""
+    SECTION_TITLES = {
+        "summary": "Tóm tắt chuyến đi",
+        "itinerary": "Lịch trình chi tiết",
+        "costs": "Tóm tắt chi phí",
+        "logistics": "Thông tin hậu cần",
+        "recommendations": "Gợi ý & Lời khuyên"
+    }
+
+    @classmethod
+    def format_section(cls, content: str, section_type: str) -> ResponseSection:
         return ResponseSection(
-            title_en="Trip Summary",
-            title_vi="Tóm tắt chuyến đi",
+            title_vi=cls.SECTION_TITLES.get(section_type, section_type.title()),
             content=content,
-            section_type="summary"
-        )
-    
-    @staticmethod
-    def format_itinerary_section(content: str) -> ResponseSection:
-        """Format itinerary section."""
-        return ResponseSection(
-            title_en="Detailed Itinerary",
-            title_vi="Lịch trình chi tiết",
-            content=content,
-            section_type="itinerary"
-        )
-    
-    @staticmethod
-    def format_costs_section(content: str) -> ResponseSection:
-        """Format costs section."""
-        return ResponseSection(
-            title_en="Cost Breakdown",
-            title_vi="Tóm tắt chi phí",
-            content=content,
-            section_type="costs"
-        )
-    
-    @staticmethod
-    def format_logistics_section(content: str) -> ResponseSection:
-        """Format logistics section."""
-        return ResponseSection(
-            title_en="Logistics & Information",
-            title_vi="Thông tin hậu cần",
-            content=content,
-            section_type="logistics"
-        )
-    
-    @staticmethod
-    def format_recommendations_section(content: str) -> ResponseSection:
-        """Format recommendations section."""
-        return ResponseSection(
-            title_en="Recommendations & Tips",
-            title_vi="Gợi ý & Lời khuyên",
-            content=content,
-            section_type="recommendations"
+            section_type=section_type
         )
     
     @staticmethod
     def assemble_response(sections: List[ResponseSection], trip_data: TripData) -> Dict[str, Any]:
-        """Assemble final response."""
+        """Assemble final response and database schema representations."""
+        import uuid
+        
+        # Generate Trip Document Schema
+        trip_id = f"T{uuid.uuid4().hex[:8]}"
+        now_iso = datetime.now().isoformat()
+        
+        # Extract destination string
+        dest = trip_data.destination
+        if isinstance(dest, list):
+            dest = ", ".join(dest)
+            
+        trip_document = {
+            "tripId": trip_id,
+            "userId": "",
+            "budgetId": None,
+            "status": "PLANNING",
+            "version": 1,
+            "destination": dest,
+            "totalBudget": int(trip_data.budget),
+            "validationScore": trip_data.validation_score,
+            "categoryScores": trip_data.category_scores,
+            "createdAt": now_iso
+        }
+        
+        # Generate DayDetails Document Schema
+        day_details_documents = []
+        for day_idx, day_info in enumerate(trip_data.schedule):
+            # Try to get the real date or fallback
+            day_num = day_info.get("day", day_idx + 1)
+            date_str = day_info.get("date", "")
+            if date_str:
+                try:
+                    # Format to ISO if it's YYYY-MM-DD
+                    date_iso = datetime.strptime(date_str, "%Y-%m-%d").isoformat()
+                except ValueError:
+                    date_iso = date_str
+            else:
+                date_iso = now_iso
+                
+            day_acts = []
+            for act in day_info.get("items", day_info.get("activities", [])):
+                # Map scheduling items to dayActs schema
+                # Some properties may differ depending on what the scheduler outputs
+                start_time = act.get("time_start", act.get("time", "08:00"))
+                end_time = act.get("time_end", "10:00")
+                if date_iso and "T" in date_iso:
+                    # Combine date with time
+                    base_date = date_iso.split("T")[0]
+                    full_start = f"{base_date}T{start_time}:00"
+                    full_end = f"{base_date}T{end_time}:00"
+                else:
+                    full_start = start_time
+                    full_end = end_time
+                    
+                act_type = act.get("type", "Activity").capitalize()
+                if act_type == "Meal": act_type = "Food"
+                elif act_type == "Transportation": act_type = "Transport"
+                elif act_type == "Accommodation": act_type = "Stay"
+                else: act_type = "Sightseeing"
+                
+                day_acts.append({
+                    "activityId": f"A{uuid.uuid4().hex[:8]}",
+                    "name": act.get("name", "Unknown Activity"),
+                    "type": act_type,
+                    "startTime": full_start,
+                    "endTime": full_end,
+                    "price": int(act.get("cost", act.get("estimatedPrice", 0))),
+                    "note": act.get("notes", act.get("description", "")),
+                    "image": act.get("img_url", "/src/assets/images/default.jpg"),
+                    "locationId": act.get("locationId"),
+                    "eateryId": None,
+                    "accommodationId": act.get("locationId") if act_type == "Stay" else None,
+                    "transportId": None
+                })
+                
+            day_details_documents.append({
+                "dayScheduleDetailedId": f"D{uuid.uuid4().hex[:8]}",
+                "tripId": trip_id,
+                "dayNumber": day_num,
+                "date": date_iso,
+                "dayActs": day_acts
+            })
+
         return {
             "status": "success",
-            "generated_at": datetime.now().isoformat(),
+            "generated_at": now_iso,
             "trip_info": {
                 "destination": trip_data.destination,
                 "starting_location": trip_data.starting_location,
@@ -396,13 +421,16 @@ class ResponseFormatter:
                 {
                     "type": section.section_type,
                     "title_vi": section.title_vi,
-                    "title_en": section.title_en,
                     "content": section.content
                 }
                 for section in sections
             ],
-            "language": "vi",
-            "model": "gemini-1.5-flash"
+            "database_schema": {
+                "trip": trip_document,
+                "day_details": day_details_documents
+            },
+            "status": "APPROVED",
+            "model": DEFAULT_MODEL
         }
 
 
@@ -413,115 +441,34 @@ class ResponseFormatter:
 def generate_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     """
     Main node function: Generate natural language response.
-    
     Args:
         state: Workflow state with validated trip plan
-        
     Returns:
         Updated state with generated response
     """
-    logger.info("=" * 60)
-    logger.info("GENERATE_ANSWER NODE: Starting response generation (Vietnamese)")
-    logger.info("=" * 60)
-    
-    try:
-        # 1. Extract trip data
-        formatter = TripDataFormatter()
-        trip_data = formatter.extract_from_state(state)
-        
-        if not trip_data:
-            logger.error("Failed to extract trip data")
-            return {
-                **state,
-                "error": "Failed to extract trip data",
-                "final_answer": None
-            }
-        
-        logger.info(f"Trip data extracted: {trip_data.destination} ({trip_data.duration_days} days)")
-        
-        # 2. Initialize LLM
-        llm = LLMGenerator()
-        if not llm.client:
-            logger.warning("Gemini not available, using fallback response")
-            return _fallback_response(state, trip_data)
-        
-        # 3. Generate sections using Gemini
-        prompt_engine = PromptEngine()
-        response_formatter = ResponseFormatter()
-        sections = []
-        
-        # Generate each section
-        section_configs = [
-            ("summary", prompt_engine.summary_prompt, response_formatter.format_summary_section, 300),
-            ("itinerary", prompt_engine.itinerary_prompt, response_formatter.format_itinerary_section, 800),
-            ("costs", prompt_engine.costs_prompt, response_formatter.format_costs_section, 400),
-            ("logistics", prompt_engine.logistics_prompt, response_formatter.format_logistics_section, 500),
-            ("recommendations", prompt_engine.recommendations_prompt, response_formatter.format_recommendations_section, 500)
-        ]
-        
-        for section_name, prompt_func, format_func, max_tokens in section_configs:
-            logger.info(f"Generating {section_name} section...")
-            
-            prompt = prompt_func(trip_data)
-            content = llm.generate(prompt, temperature=0.7, max_tokens=max_tokens)
-            
-            if content:
-                section = format_func(content)
-                sections.append(section)
-                logger.info(f"✓ {section_name} section generated ({len(content)} chars)")
-            else:
-                logger.warning(f"Failed to generate {section_name} section")
-        
-        # 4. Assemble final response
-        final_response = response_formatter.assemble_response(sections, trip_data)
-        
-        logger.info("=" * 60)
-        logger.info(f"RESPONSE GENERATION COMPLETE: {len(sections)} sections generated (Vietnamese)")
-        logger.info("=" * 60)
-        
-        return {
-            **state,
-            "final_answer": final_response,
-            "response_status": "success",
-            "response_sections_count": len(sections)
-        }
-        
-    except Exception as e:
-        logger.error(f"Error in generate_answer_node: {e}", exc_info=True)
-        return {
-            **state,
-            "error": str(e),
-            "final_answer": None,
-            "response_status": "error"
-        }
-
-
-def _fallback_response(state: Dict[str, Any], trip_data: TripData) -> Dict[str, Any]:
-    """Generate fallback response when LLM is unavailable."""
-    logger.warning("Using fallback response generation (no LLM)")
-    
-    formatter = ResponseFormatter()
+    # 1. Extract trip data
+    formatter = TripDataFormatter()
+    trip_data = formatter.extract_from_state(state)
+    # 2. Initialize LLM
+    llm = LLMGenerator()
+    # 3. Generate all sections using Gemini Call 
+    prompt_engine = PromptEngine()
+    response_formatter = ResponseFormatter()
+    prompt = prompt_engine.full_trip_prompt(trip_data)
+    result_data = llm.generate_full_response(prompt) or {}
     sections = [
-        formatter.format_summary_section(
-            f"Chuyến đi {trip_data.duration_days} ngày từ {trip_data.starting_location} đến {trip_data.destination} "
-            f"cho {trip_data.travelers} du khách với ngân sách {trip_data.budget:,.0f} VND."
-        ),
-        formatter.format_itinerary_section(
-            "\n".join([
-                TripDataFormatter.format_daily_schedule(day["day"], day.get("activities", []))
-                for day in trip_data.schedule
-            ]) if trip_data.schedule else "Lịch trình đang được xử lý"
-        ),
-        formatter.format_costs_section(
-            TripDataFormatter.format_cost_breakdown(trip_data.costs)
-        )
+        response_formatter.format_section(result_data.get(k, ""), k)
+        for k in ["summary", "itinerary", "costs", "logistics", "recommendations"]
     ]
-    
-    final_response = formatter.assemble_response(sections, trip_data)
-    final_response["note"] = "Phiên bản rút gọn - API LLM không khả dụng"
-    
+    # 4. Assemble final response
+    final_response = response_formatter.assemble_response(sections, trip_data)
+
     return {
         **state,
         "final_answer": final_response,
-        "response_status": "fallback"
+        "response_status": "success",
+        "response_sections_count": len(sections)
     }
+
+
+

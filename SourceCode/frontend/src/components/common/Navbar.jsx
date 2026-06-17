@@ -35,9 +35,9 @@ const Navbar = () => {
         >
           {theme === 'light' ? <FiMoon size={20} /> : <FiSun size={20} />}
         </button>
-        <Link to="/features" style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Features</Link>
-        <Link to="/about" style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>About</Link>
-        <Link to="/login" className="btn-premium btn-primary" style={{ padding: '8px 24px', textDecoration: 'none', color: 'white' }}>Get Started</Link>
+        <Link to="/features" style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Tính năng</Link>
+        <Link to="/about" style={{ fontSize: '0.9rem', fontWeight: 500, color: 'var(--text-secondary)' }}>Giới thiệu</Link>
+        <Link to="/login" className="btn-premium btn-primary" style={{ padding: '8px 24px', textDecoration: 'none', color: 'white' }}>Bắt đầu</Link>
       </div>
     </nav>
   );

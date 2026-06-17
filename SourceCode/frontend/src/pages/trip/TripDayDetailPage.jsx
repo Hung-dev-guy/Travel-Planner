@@ -124,60 +124,67 @@ const TripDayDetailPage = () => {
                 </div>
 
                 {/* Content */}
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
-                    <div>
-                      <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.05rem' }}>{item.name}</h3>
-                      <span style={{
-                        display: 'inline-block',
-                        marginTop: 4,
-                        padding: '2px 10px',
-                        borderRadius: 10,
-                        fontSize: '0.75rem',
-                        fontWeight: 600,
-                        background: badge.bg,
-                        color: badge.color,
-                      }}>
-                        {item.type}
-                      </span>
+                <div style={{ flex: 1, display: 'flex', gap: 16, flexDirection: window.innerWidth < 600 ? 'column' : 'row' }}>
+                  {item.image && (
+                    <div style={{ width: 120, height: 100, flexShrink: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-light)' }}>
+                      <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                     </div>
-                    <div style={{ textAlign: 'right' }}>
-                      <div style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '1rem' }}>
-                        {fmt(item.cost)} ₫
+                  )}
+                  <div style={{ flex: 1 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+                      <div>
+                        <h3 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1.05rem' }}>{item.name}</h3>
+                        <span style={{
+                          display: 'inline-block',
+                          marginTop: 4,
+                          padding: '2px 10px',
+                          borderRadius: 10,
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          background: badge.bg,
+                          color: badge.color,
+                        }}>
+                          {item.type}
+                        </span>
                       </div>
-                      {item.duration_minutes > 0 && (
-                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
-                          <FiClock /> {Math.round(item.duration_minutes / 60 * 10) / 10}h
+                      <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontWeight: 700, color: 'var(--primary)', fontSize: '1rem' }}>
+                          {fmt(item.cost)} ₫
                         </div>
-                      )}
+                        {item.duration_minutes > 0 && (
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4, justifyContent: 'flex-end', marginTop: 2 }}>
+                            <FiClock /> {Math.round(item.duration_minutes / 60 * 10) / 10}h
+                          </div>
+                        )}
+                      </div>
                     </div>
+
+                    {item.location && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 8 }}>
+                        <FiMapPin /> {item.location}
+                      </div>
+                    )}
+
+                    {item.description && (
+                      <p style={{ margin: '8px 0 0', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                        {item.description}
+                      </p>
+                    )}
+
+                    {item.notes && (
+                      <div style={{
+                        marginTop: 10,
+                        padding: '10px 14px',
+                        background: 'rgba(16,185,129,0.08)',
+                        borderRadius: 8,
+                        borderLeft: '4px solid var(--primary)',
+                        fontSize: '0.85rem',
+                        color: 'var(--text-primary)',
+                      }}>
+                        <strong>💡 Note:</strong> {item.notes}
+                      </div>
+                    )}
                   </div>
-
-                  {item.location && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-secondary)', fontSize: '0.85rem', marginBottom: 8 }}>
-                      <FiMapPin /> {item.location}
-                    </div>
-                  )}
-
-                  {item.description && (
-                    <p style={{ margin: '8px 0 0', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                      {item.description}
-                    </p>
-                  )}
-
-                  {item.notes && (
-                    <div style={{
-                      marginTop: 10,
-                      padding: '10px 14px',
-                      background: 'rgba(16,185,129,0.08)',
-                      borderRadius: 8,
-                      borderLeft: '4px solid var(--primary)',
-                      fontSize: '0.85rem',
-                      color: 'var(--text-primary)',
-                    }}>
-                      <strong>💡 Note:</strong> {item.notes}
-                    </div>
-                  )}
                 </div>
               </div>
             );

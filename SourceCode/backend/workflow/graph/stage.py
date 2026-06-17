@@ -31,13 +31,13 @@ class Constraints(TypedDict):
 
 class State(TypedDict):
     # Initial input fields
-    user_des_input: Optional[str]
-    group_size: Optional[int]
-    start_date: Optional[str]
-    end_date: Optional[str]
-    start_location: Optional[str]
-    destination: Optional[List[str]]
-    personal_travel_style_des: Optional[str]
+    user_des_input: str
+    group_size: int
+    start_date: str
+    end_date: str
+    start_location: str
+    destination: List[str]
+    personal_travel_style_des: str
 
     # Node output / structured fields
     trip_metadata: TripMetadata
@@ -50,7 +50,7 @@ class State(TypedDict):
     scheduling: List[Dict[str, Any]]
 
     # Validation fields
-    validation: Optional[Dict[str, Any]]           # ValidationResult.to_dict() output
-    validation_feedback: Optional[List[Dict]]      # Recommendations passed back to Scheduler
-    validation_iteration: Optional[int]            # Tracks the current feedback loop iteration
-    final_answer: Optional[Dict[str, Any]]         # Final formatted output from Generate_answer
+    validation: Dict[str, Any]           
+    validation_feedback: List[Dict]     
+    validation_iteration: int           
+    final_answer: Dict[str, Any]         

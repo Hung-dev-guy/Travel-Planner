@@ -1,6 +1,7 @@
 from typing import Literal
 from workflow.graph.stage import State
 from langgraph.graph import StateGraph, END
+from langgraph.checkpoint.memory import MemorySaver
 from workflow.nodes.Extractor_agent import extractor_node
 from workflow.nodes.Mobility_agent import mobility_node
 from workflow.nodes.Planner import Planner_node
@@ -17,7 +18,7 @@ MAX_VALIDATION_ITERATIONS = 3
 MIN_ACCEPTABLE_SCORE = 70.0
 
 
-def _route_after_validation(state: State) -> Literal["scheduling", "generate_answer"]:
+def route_after_validation(state: State) -> Literal["scheduling", "generate_answer"]:
     """
     Conditional routing after the validation node.
 
@@ -35,18 +36,6 @@ def _route_after_validation(state: State) -> Literal["scheduling", "generate_ans
 
     if iteration >= MAX_VALIDATION_ITERATIONS:
         return "generate_answer"
-
-    # Prepare state for next iteration
-    state["validation_iteration"] = iteration + 1
-
-    # Pass recommendations as feedback to the scheduler
-    recommendations = validation.get("recommendations", [])
-    if recommendations:
-        # Convert recommendation dicts (already serialised by to_dict()) back to list
-        state["validation_feedback"] = [
-            r if isinstance(r, dict) else r.to_dict()
-            for r in recommendations
-        ]
 
     return "scheduling"
 
@@ -76,7 +65,7 @@ def build_workflow():
     workflow.add_edge("scheduling", "validation")
     workflow.add_conditional_edges(
         "validation",
-        _route_after_validation,
+        route_after_validation,
         {
             "scheduling":      "scheduling",
             "generate_answer": "generate_answer",
@@ -84,4 +73,5 @@ def build_workflow():
     )
     workflow.add_edge("generate_answer", END)
 
-    return workflow.compile()
+    memory = MemorySaver()
+    return workflow.compile(checkpointer=memory)

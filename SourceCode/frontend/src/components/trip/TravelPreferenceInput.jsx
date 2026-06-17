@@ -8,28 +8,28 @@ import React from 'react';
  *   onChange  {(styles: string[]) => void} — called whenever selection changes
  */
 const STYLE_OPTIONS = [
-  { value: 'nature',    label: '🌿 Nature' },
-  { value: 'cultural',  label: '🏛️ Cultural' },
-  { value: 'adventure', label: '⛰️ Adventure' },
-  { value: 'relaxation',label: '🏖️ Relaxation' },
-  { value: 'luxury',    label: '💎 Luxury' },
-  { value: 'budget',    label: '💰 Budget' },
-  { value: 'family',    label: '👨‍👩‍👧 Family' },
-  { value: 'solo',      label: '🎒 Solo' },
+  { value: 'nature',    label: '🌿 Thiên nhiên' },
+  { value: 'cultural',  label: '🏛️ Văn hoá' },
+  { value: 'adventure', label: '⛰️ Khám phá' },
+  { value: 'relaxation',label: '🏖️ Thư giãn' },
+  { value: 'luxury',    label: '💎 Sang trọng' },
+  { value: 'budget',    label: '💰 Tiết kiệm' },
+  { value: 'family',    label: '👨‍👩‍👧 Gia đình' },
+  { value: 'solo',      label: '🎒 Đi một mình' },
 ];
 
 const PACE_OPTIONS = [
-  { value: 'thong thả', label: '🐢 Leisurely' },
-  { value: 'moderate',  label: '🚶 Moderate' },
-  { value: 'fast',      label: '🏃 Fast-paced' },
+  { value: 'thong thả', label: '🐢 Thong thả' },
+  { value: 'moderate',  label: '🚶 Vừa phải' },
+  { value: 'fast',      label: '🏃 Nhanh nhẹn' },
 ];
 
 const COMPANION_OPTIONS = [
-  { value: 'Couples',   label: '💑 Couples' },
-  { value: 'Family',    label: '👨‍👩‍👧 Family' },
-  { value: 'Friends',   label: '👯 Friends' },
-  { value: 'Solo',      label: '🎒 Solo' },
-  { value: 'Group',     label: '👥 Group' },
+  { value: 'Couples',   label: '💑 Cặp đôi' },
+  { value: 'Family',    label: '👨‍👩‍👧 Gia đình' },
+  { value: 'Friends',   label: '👯 Bạn bè' },
+  { value: 'Solo',      label: '🎒 Đi một mình' },
+  { value: 'Group',     label: '👥 Nhóm' },
 ];
 
 const Chip = ({ label, active, onClick }) => (
@@ -66,7 +66,7 @@ const TravelPreferenceInput = ({ selected = [], onChange, pace, onPaceChange, co
       {/* Travel style */}
       <div className="card-premium">
         <label style={{ display: 'block', marginBottom: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          🎯 Travel Style <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.85rem' }}>(pick all that apply)</span>
+          🎯 Phong cách du lịch <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.85rem' }}>(chọn tất cả những gì bạn thích)</span>
         </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           {STYLE_OPTIONS.map(opt => (
@@ -85,7 +85,7 @@ const TravelPreferenceInput = ({ selected = [], onChange, pace, onPaceChange, co
         {/* Travel Pace */}
         <div className="card-premium">
           <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            ⏱️ Travel Pace
+            ⏱️ Nhịp độ chuyến đi
           </label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {PACE_OPTIONS.map(opt => (
@@ -102,7 +102,7 @@ const TravelPreferenceInput = ({ selected = [], onChange, pace, onPaceChange, co
         {/* Companion Type */}
         <div className="card-premium">
           <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
-            👥 Traveling With
+            👥 Đi cùng ai
           </label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
             {COMPANION_OPTIONS.map(opt => (

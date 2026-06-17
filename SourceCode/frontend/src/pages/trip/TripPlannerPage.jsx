@@ -10,7 +10,7 @@ const TripPlannerPage = () => {
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
-    destination:  '',
+    destination:  [],
     startDate:    '',
     endDate:      '',
     groupSize:    2,
@@ -36,19 +36,19 @@ const TripPlannerPage = () => {
     setError('');
 
     // Basic validation
-    if (!formData.destination.trim()) { setError('Please enter a destination.'); return; }
-    if (!formData.startDate)          { setError('Please choose a start date.'); return; }
-    if (!formData.endDate)            { setError('Please choose an end date.');   return; }
+    if (!formData.destination || formData.destination.length === 0) { setError('Vui lòng chọn ít nhất một điểm đến.'); return; }
+    if (!formData.startDate)          { setError('Vui lòng chọn ngày bắt đầu.'); return; }
+    if (!formData.endDate)            { setError('Vui lòng chọn ngày kết thúc.');   return; }
     if (formData.endDate < formData.startDate) {
-      setError('End date must be after start date.');
+      setError('Ngày kết thúc phải sau ngày bắt đầu.');
       return;
     }
 
     setLoading(true);
     try {
       const payload = {
-        user_des_input:      formData.userDesInput || `Trip to ${formData.destination}`,
-        destination:         formData.destination.trim(),
+        user_des_input:      formData.userDesInput || `Chuyến đi tới ${formData.destination.join(', ')}`,
+        destination:         formData.destination,
         start_date:          formData.startDate,
         end_date:            formData.endDate,
         group_size:          Number(formData.groupSize) || 2,
@@ -67,8 +67,8 @@ const TripPlannerPage = () => {
     } catch (err) {
       console.error('Pipeline error:', err);
       const msg = err.response?.data?.error
-        || (err.code === 'ECONNABORTED' ? 'Request timed out — the server may still be starting. Please try again.' : '')
-        || 'Could not connect to the server. Make sure the Django backend is running on port 5000.';
+        || (err.code === 'ECONNABORTED' ? 'Hết thời gian chờ — máy chủ có thể đang khởi động. Vui lòng thử lại.' : '')
+        || 'Không thể kết nối đến máy chủ. Vui lòng kiểm tra lại hệ thống.';
       setError(msg);
     } finally {
       setLoading(false);
@@ -79,10 +79,10 @@ const TripPlannerPage = () => {
     <div className="trip-planner-page" style={{ maxWidth: '800px', margin: '0 auto' }}>
       <header style={{ marginBottom: '40px' }}>
         <h1 style={{ fontSize: '2.5rem', marginBottom: '8px', color: 'var(--primary)' }}>
-          Create Your Next Adventure
+          Tạo Hành Trình Tiếp Theo Của Bạn
         </h1>
         <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
-          Tell us where you want to go and what you love, and our AI will handle the rest.
+          Hãy cho chúng tôi biết bạn muốn đi đâu và bạn thích gì, AI của chúng tôi sẽ lo phần còn lại.
         </p>
       </header>
 
@@ -133,9 +133,9 @@ const TripPlannerPage = () => {
       }}>
         <div style={{ fontSize: '2rem' }}><FiHelpCircle /></div>
         <div>
-          <h4 style={{ margin: 0 }}>Pro Tip:</h4>
+          <h4 style={{ margin: 0 }}>Mẹo nhỏ:</h4>
           <p style={{ margin: '4px 0 0 0', opacity: 0.9 }}>
-            The AI planner works best for Vietnamese destinations — try Quảng Ninh, Đà Nẵng, or Hội An!
+            AI Planner hoạt động tốt nhất cho các điểm đến tại Việt Nam — hãy thử Quảng Ninh, Đà Nẵng, hoặc Hội An!
           </p>
         </div>
       </div>

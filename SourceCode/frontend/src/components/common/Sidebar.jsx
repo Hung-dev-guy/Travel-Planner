@@ -13,11 +13,11 @@ import {
 const Sidebar = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const menuItems = [
-    { name: 'Dashboard', icon: <FiLayout />, path: '/dashboard' },
-    { name: 'Trip Planner', icon: <FiMap />, path: '/' },
-    { name: 'AI Chatbot', icon: <FiMessageSquare />, path: '/chat' },
-    { name: 'Destinations', icon: <FiCompass />, path: '/search' },
-    { name: 'Settings', icon: <FiSettings />, path: '/settings' },
+    { name: 'Bảng điều khiển', icon: <FiLayout />, path: '/dashboard' },
+    { name: 'Lên kế hoạch', icon: <FiMap />, path: '/planner' },
+    { name: 'AI Trợ lý', icon: <FiMessageSquare />, path: '/chat' },
+    { name: 'Điểm đến', icon: <FiCompass />, path: '/destinations' },
+    { name: 'Cài đặt', icon: <FiSettings />, path: '/settings' },
   ];
 
   return (

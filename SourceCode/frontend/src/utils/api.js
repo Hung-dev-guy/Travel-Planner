@@ -1,9 +1,11 @@
 import axios from 'axios';
 
+// All API requests go to the Django backend (port 8000 by default).
+// The Vite dev server proxies /api/* → http://localhost:8000 to avoid CORS.
 const api = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
-  timeout: 120_000, // 2 min — pipeline takes ~30–60 s (AI ranking + scheduling)
+  timeout: 180_000, // 3 min — AI pipeline can take ~60-90 s
 });
 
 export default api;

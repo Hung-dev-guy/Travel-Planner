@@ -135,9 +135,15 @@ def validate_budget(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any
             impact="Cannot validate budget"
         )]
     
-    travel_budget = constraints.get("travel_budget", float('inf'))
-    group_size = constraints.get("group_size", 1)
-    
+    try:
+        travel_budget = float(constraints.get("travel_budget", float('inf')))
+    except (ValueError, TypeError):
+        travel_budget = float('inf')
+        
+    try:
+        group_size = int(constraints.get("group_size", 1))
+    except (ValueError, TypeError):
+        group_size = 1
     # Calculate total trip cost
     total_cost = 0.0
     day_costs = []
@@ -219,7 +225,10 @@ def validate_time(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any])
             impact="Cannot validate time feasibility"
         )]
     
-    daily_active_hours = constraints.get("daily_active_hours", 10)
+    try:
+        daily_active_hours = float(constraints.get("daily_active_hours", 10))
+    except (ValueError, TypeError):
+        daily_active_hours = 10.0
     
     days_over = 0
     total_excess = 0
@@ -875,6 +884,15 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     # Update state
     state["validation"] = validation_result.to_dict()
     state["validation_result"] = validation_result  # Keep object for feedback loop
+    
+    # Increment iteration for the next pass
+    state["validation_iteration"] = iteration + 1
+    
+    # Pass recommendations as feedback if not approved
+    if status != "APPROVED" and recommendations:
+        state["validation_feedback"] = [r.to_dict() for r in recommendations]
+    else:
+        state["validation_feedback"] = []
     
     logger.info(f"Validation complete: score={overall_score:.0f}, status={status}, issues={len(all_issues)}")
     

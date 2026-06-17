@@ -34,7 +34,7 @@ load_dotenv()
 # Rules are evaluated in order (first match wins).
 # ==========================================
 
-_TRANSPORT_RULES: list[dict] = [
+TRANSPORT_RULES: list[dict] = [
     {
         "max_km": 1.0,
         "type": "walking",
@@ -90,31 +90,31 @@ _TRANSPORT_RULES: list[dict] = [
 # PURE-PYTHON LOGIC HELPERS
 # ==========================================
 
-def _classify(distance_km: float) -> dict:
+def classify(distance_km: float) -> dict:
     """Return the first rule whose max_km >= distance_km."""
-    for rule in _TRANSPORT_RULES:
+    for rule in TRANSPORT_RULES:
         if distance_km <= rule["max_km"]:
             return rule
-    return _TRANSPORT_RULES[-1]
+    return TRANSPORT_RULES[-1]
 
 
-def _estimate_price(distance_km: float, rule: dict) -> int:
+def estimate_price(distance_km: float, rule: dict) -> int:
     """Linear pricing formula: base + rate × distance (rounded to nearest 1 000 VNĐ)."""
     raw = rule["base_price"] + rule["price_per_km"] * distance_km
     return int(round(raw / 1_000) * 1_000)
 
 
-def _within_budget(price_per_person: int, group_size: int, budget: int) -> bool:
+def within_budget(price_per_person: int, group_size: int, budget: int) -> bool:
     """Total transport spend must not exceed the travel budget."""
     return price_per_person * group_size <= budget
 
 
-def _suitability_score(rule: dict, companion_types: list[str]) -> int:
+def suitability_score(rule: dict, companion_types: list[str]) -> int:
     """Count how many requested companion types the transport supports."""
     return len(set(rule["suitability"]) & set(companion_types))
 
 
-def _build_note(candidate: dict, group_size: int, travel_preferences: dict) -> str:
+def build_note(candidate: dict, group_size: int, travel_preferences: dict) -> str:
     """Generate a Vietnamese note string from computed fields — no LLM needed."""
     t = candidate["type"]
     dist = candidate["distance_km"]
@@ -157,9 +157,9 @@ def _build_note(candidate: dict, group_size: int, travel_preferences: dict) -> s
 # DATABASE FETCH FUNCTIONS
 # ==========================================
 
-_TRANSPORT_CATS = ["Transport", "Transportation", "Mobility"]
+TRANSPORT_CATS = ["Transport", "Transportation", "Mobility"]
 
-_PROJECTION = {
+PROJECTION = {
     "_id": 0,
     "locationId": 1,
     "name": 1,
@@ -170,24 +170,43 @@ _PROJECTION = {
 }
 
 
-def fetch_connected_wards(destination: str) -> tuple[list[str], list[dict]]:
+def fetch_connected_wards(destination: str, start_location: str = None) -> tuple[list[str], list[dict]]:
     """
     Neo4j:
       - All Ward names under the Province  (for MongoDB filter)
       - All CONNECTED_TO edges             (from_ward, to_ward, distance_km)
+      - Appends route from start_location to destination if provided
     """
     driver = get_neo4j_driver()
     with driver.session() as session:
         ward_rows = session.run(
-            "MATCH (p:Province {name: $dest})-[:HAS]->(w:Ward) "
-            "RETURN w.name AS ward_name",
+            """
+            MATCH (p:Province {name: $dest})-[:HAS]->(w:Ward) 
+            RETURN w.name AS ward_name
+            UNION
+            MATCH (w1:Ward {name: $dest})-[:CONNECTED_TO]-(w:Ward)
+            RETURN w.name AS ward_name
+            UNION
+            MATCH (w:Ward {name: $dest})
+            RETURN w.name AS ward_name
+            """,
             dest=destination,
         ).data()
         route_rows = session.run(
-            "MATCH (p:Province {name: $dest})-[:HAS]->(w1:Ward) "
-            "MATCH (w1)-[r:CONNECTED_TO]->(w2:Ward) "
-            "RETURN w1.name AS from_ward, w2.name AS to_ward, "
-            "r.distance_km AS distance_km",
+            """
+            MATCH (p:Province {name: $dest})-[:HAS]->(w1:Ward) 
+            MATCH (w1)-[r:CONNECTED_TO]->(w2:Ward) 
+            RETURN w1.name AS from_ward, w2.name AS to_ward, r.distance_km AS distance_km
+            UNION
+            MATCH (w1:Ward {name: $dest})-[:CONNECTED_TO]-(w2:Ward)
+            MATCH (w1)-[r:CONNECTED_TO]->(w2)
+            RETURN w1.name AS from_ward, w2.name AS to_ward, r.distance_km AS distance_km
+            UNION
+            MATCH (w1:Ward {name: $dest})-[:CONNECTED_TO]-(w:Ward)
+            MATCH (w)-[r:CONNECTED_TO]->(w2:Ward)
+            WHERE w2.name = $dest OR (w2)-[:CONNECTED_TO]-(:Ward {name: $dest})
+            RETURN w.name AS from_ward, w2.name AS to_ward, r.distance_km AS distance_km
+            """,
             dest=destination,
         ).data()
 
@@ -200,6 +219,22 @@ def fetch_connected_wards(destination: str) -> tuple[list[str], list[dict]]:
         }
         for r in route_rows
     ]
+    
+    if start_location and start_location != destination:
+        # Check if there is already an inter-provincial route
+        has_inter = any(r["from_ward"] == start_location and r["to_ward"] == destination for r in routes)
+        if not has_inter:
+            routes.append({
+                "from_ward": start_location,
+                "to_ward": destination,
+                "distance_km": 800.0, # Estimated long distance
+            })
+            routes.append({
+                "from_ward": destination,
+                "to_ward": start_location,
+                "distance_km": 800.0,
+            })
+            
     return ward_names, routes
 
 
@@ -248,7 +283,20 @@ def build_transport_candidates(
     """
     group_size = max(int(constraints.get("group_size") or 1), 1)
     raw_budget = constraints.get("travel_budget")
-    budget     = int(raw_budget) if raw_budget is not None else 10_000_000
+    budget = 10_000_000
+    if isinstance(raw_budget, (int, float)):
+        budget = int(raw_budget)
+    elif isinstance(raw_budget, str) and raw_budget.strip():
+        import re
+        digits = re.findall(r'\d+', raw_budget)
+        if digits:
+            num = int("".join(digits))
+            if "triệu" in raw_budget.lower():
+                budget = num * 1_000_000
+            elif "nghìn" in raw_budget.lower() or "k" in raw_budget.lower():
+                budget = num * 1_000
+            else:
+                budget = num
     companion_types      = travel_preferences.get("companion_type", [])
     mobility_limitations = [
         l.lower() for l in (constraints.get("mobility_limitations") or [])
@@ -275,7 +323,7 @@ def build_transport_candidates(
         seen_pairs.add((from_w, to_w))
 
         # ── Step 1: classify ──────────────────────────────────────────────────
-        rule = _classify(dist)
+        rule = classify(dist)
         t    = rule["type"]
 
         # ── Step 2: hard-filter mobility limitations ──────────────────────────
@@ -283,14 +331,14 @@ def build_transport_candidates(
             continue
 
         # ── Step 3: estimate price ────────────────────────────────────────────
-        price = _estimate_price(dist, rule)
+        price = estimate_price(dist, rule)
 
         # ── Step 4: hard-filter budget ────────────────────────────────────────
-        if not _within_budget(price, group_size, budget):
+        if not within_budget(price, group_size, budget):
             continue
 
         # ── Step 5: suitability score ─────────────────────────────────────────
-        score = _suitability_score(rule, companion_types)
+        score = suitability_score(rule, companion_types)
 
         # ── Step 6: attach real provider ─────────────────────────────────────
         provider = provider_by_ward.get(from_w) or provider_by_ward.get(to_w)
@@ -308,8 +356,7 @@ def build_transport_candidates(
         }
 
         # ── Step 7: template note ─────────────────────────────────────────────
-        candidate["note"] = _build_note(candidate, group_size, travel_preferences)
-
+        candidate["note"] = build_note(candidate, group_size, travel_preferences)
         candidates.append(candidate)
 
     # ── Rank: suitability score desc, then price asc ─────────────────────────
@@ -363,8 +410,10 @@ Hãy trả về danh sách ID theo thứ tự ưu tiên mới.
 """)
 ])
 
+from workflow.models.llm import DEFAULT_MODEL
+
 _refine_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
+    model=DEFAULT_MODEL,
     temperature=0.5,
     google_api_key=os.getenv("GOOGLE_API_KEY"),
 )
@@ -457,9 +506,15 @@ def mobility_node(state: State) -> State:
     destination = trip_metadata.get("destination", "")
     if isinstance(destination, list):
         destination = destination[0] if destination else ""
+    if destination:
+        destination = destination.split(",")[0].strip()
+        
+    start_location = trip_metadata.get("start_location")
+    if start_location:
+        start_location = start_location.split(",")[0].strip()
 
     # ── Stage 1: Hard Constraints (Pure Python) ───────────────────────────────
-    ward_names, routes = fetch_connected_wards(destination)
+    ward_names, routes = fetch_connected_wards(destination, start_location)
     providers          = fetch_transport_options(ward_names)
     feasible           = build_transport_candidates(
         routes, providers, constraints, travel_preferences

@@ -19,7 +19,10 @@ ALLOWED_HOSTS = ["*"]
 
 INSTALLED_APPS = [
     "corsheaders",
-    "trips",
+    "chatbot",
+    "dashboard",
+    "destinations",
+    "auths",
 ]
 
 MIDDLEWARE = [

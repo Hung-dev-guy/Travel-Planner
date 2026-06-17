@@ -1,29 +1,23 @@
 import api from '../utils/api';
 
 const tripService = {
-  createTrip:   (data) => api.post('/trips', data),
-  getTrips:     ()     => api.get('/trips'),
-
   /**
-   * Run the full planning pipeline.
-   * @param {{
-   *   user_des_input: string,
-   *   destination: string,
-   *   start_date: string,
-   *   end_date: string,
-   *   group_size: number,
-   *   budget: number,
-   *   travel_style: string[],
-   *   travel_pace: string,
-   *   companion_type: string,
-   *   accommodation_style: string,
-   *   health_limitations: string[]
-   * }} payload
+   * Run the full AI trip-planning pipeline.
+   * Returns { trip_overview, scheduling, validation, status_message }
    */
-  generatePlan: (payload) => api.post('/pipeline/run', payload),
+  generatePlan: (payload) => api.post('/workflow/api/run', payload),
 
-  /** Quick health check to verify the Django server is reachable. */
-  health:       ()       => api.get('/pipeline/health'),
+  /** Save the generated trip to the database */
+  savePlan: (payload) => api.post('/workflow/api/save-trip', payload),
+
+  /** Fetch a saved trip by ID */
+  getTripById: (tripId) => api.get(`/workflow/api/trip/${tripId}/`),
+
+  /** Delete a saved trip */
+  deleteTrip: (tripId) => api.delete(`/workflow/api/trip/${tripId}/delete`),
+
+  /** Quick health-check to verify the Django server is reachable. */
+  health: () => api.get('/workflow/api/health'),
 };
 
 export default tripService;

@@ -4,26 +4,26 @@ import { FiCpu, FiMap, FiPieChart } from 'react-icons/fi';
 const FeaturesPage = () => {
   const features = [
     {
-      title: 'AI Trip Planner',
-      description: 'Our advanced AI analyzes your preferences to create a perfectly balanced itinerary in seconds.',
+      title: 'AI Lên Kế Hoạch',
+      description: 'AI tiên tiến của chúng tôi phân tích sở thích của bạn để tạo ra lịch trình hoàn hảo chỉ trong vài giây.',
       icon: <FiCpu />,
       color: 'var(--primary)'
     },
     {
-      title: 'Customizable Routes',
-      description: 'Add, remove, or rearrange activities with our intuitive drag-and-drop interface.',
+      title: 'Tùy chỉnh Lộ trình',
+      description: 'Thêm, xóa hoặc sắp xếp lại các hoạt động với giao diện kéo thả trực quan.',
       icon: <FiMap />,
       color: 'var(--secondary)'
     },
     {
-      title: 'Budget Optimizer',
-      description: 'Keep track of your spending with real-time price estimation and cost-saving tips.',
+      title: 'Tối ưu Ngân sách',
+      description: 'Theo dõi chi tiêu với ước tính giá thực tế và mẹo tiết kiệm chi phí.',
       icon: <FiPieChart />,
       color: 'var(--accent)'
     },
     {
-      title: 'Interactive Travel Maps',
-      description: 'Visualize your journey with our integrated mapping system and offline support.',
+      title: 'Bản đồ Tương tác',
+      description: 'Hình dung hành trình của bạn với hệ thống bản đồ tích hợp và hỗ trợ ngoại tuyến.',
       icon: '🗺️',
       color: '#10b981'
     }
@@ -43,10 +43,10 @@ const FeaturesPage = () => {
           lineHeight: '1.2',
           paddingBottom: '10px'
         }}>
-          Elevate Your Travel Experience
+          Nâng tầm Trải nghiệm Du lịch
         </h1>
         <p style={{ fontSize: '1.25rem', color: 'var(--text-secondary)', maxWidth: '700px', margin: '0 auto' }}>
-          Discover the powerful features that make Traplanner the only companion you need for your next adventure.
+          Khám phá những tính năng mạnh mẽ khiến Traplanner trở thành người bạn đồng hành lý tưởng cho chuyến đi tiếp theo của bạn.
         </p>
       </header>
 
@@ -61,9 +61,9 @@ const FeaturesPage = () => {
       </div>
 
       <div style={{ marginTop: '80px', textAlign: 'center', padding: '60px', background: 'white', borderRadius: 'var(--card-radius)', boxShadow: 'var(--shadow-premium)' }}>
-          <h2 style={{ marginBottom: '20px', color: 'var(--primary)' }}>Ready to start planning?</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>Join thousands of travelers who trust Traplanner for their journeys.</p>
-          <button className="btn-premium btn-primary" style={{ padding: '16px 40px', fontSize: '1.1rem' }}>Create Your Free Account</button>
+          <h2 style={{ marginBottom: '20px', color: 'var(--primary)' }}>Bạn đã sẵn sàng lên kế hoạch?</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '30px' }}>Tham gia cùng hàng ngàn khách du lịch đã tin tưởng Traplanner cho hành trình của họ.</p>
+          <button className="btn-premium btn-primary" style={{ padding: '16px 40px', fontSize: '1.1rem' }}>Tạo tài khoản miễn phí</button>
       </div>
     </div>
   );

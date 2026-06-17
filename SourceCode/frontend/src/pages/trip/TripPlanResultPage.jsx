@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiShare2, FiArrowLeft, FiCheckCircle, FiAlertCircle, FiXCircle } from 'react-icons/fi';
+import { FiShare2, FiArrowLeft, FiCheckCircle, FiAlertCircle, FiXCircle, FiSave } from 'react-icons/fi';
+import tripService from '../../services/tripService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -24,20 +25,76 @@ const scoreColor = (s) => s >= 70 ? '#10b981' : s >= 50 ? '#f59e0b' : '#ef4444';
 const TripPlanResultPage = () => {
   const location = useLocation();
   const navigate  = useNavigate();
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [fetchedResult, setFetchedResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
 
   // Pull result from router state (set by TripPlannerPage after API call)
-  const result    = location.state?.result;
+  const initialResult = location.state?.result;
   const formData  = location.state?.formData;
+  const tripIdToFetch = location.state?.tripId;
+
+  useEffect(() => {
+    if (!initialResult && tripIdToFetch) {
+      setLoading(true);
+      tripService.getTripById(tripIdToFetch)
+        .then(res => {
+          if (res.data?.success) {
+            setFetchedResult(res.data.result);
+            setIsSaved(true); // Already saved since it's from DB
+          } else {
+            setError('Không tìm thấy chuyến đi');
+          }
+        })
+        .catch(err => {
+          console.error(err);
+          setError('Lỗi khi tải dữ liệu chuyến đi');
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [initialResult, tripIdToFetch]);
+
+  const result = initialResult || fetchedResult;
+
+  const handleSavePlan = async () => {
+    if (!result?.db_schema || isSaving || isSaved) return;
+    setIsSaving(true);
+    try {
+      const response = await tripService.savePlan({
+        db_schema: result.db_schema,
+        user_id: 'U001'
+      });
+      if (response.data?.success) {
+        setIsSaved(true);
+      }
+    } catch (err) {
+      console.error('Failed to save plan:', err);
+      alert('Lưu kế hoạch thất bại. Vui lòng thử lại!');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
+        <div className="spinner" style={{ width: 40, height: 40, borderWidth: 4, borderColor: 'var(--primary)', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />
+        <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+      </div>
+    );
+  }
 
   // ── Guard: no data → redirect back ──────────────────────────────────────────
-  if (!result) {
+  if (error || (!result && !loading)) {
     return (
       <div style={{ padding: '60px 20px', textAlign: 'center' }}>
-        <h2 style={{ color: 'var(--text-primary)', marginBottom: 16 }}>No trip data found</h2>
+        <h2 style={{ color: 'var(--text-primary)', marginBottom: 16 }}>{error || 'Không tìm thấy dữ liệu chuyến đi'}</h2>
         <p style={{ color: 'var(--text-secondary)', marginBottom: 24 }}>
-          Please fill in the planner form to generate a trip.
+          Vui lòng điền form để tạo kế hoạch chuyến đi.
         </p>
-        <button className="btn-premium btn-primary" onClick={() => navigate('/')}>← Back to Planner</button>
+        <button className="btn-premium btn-primary" onClick={() => navigate('/planner')}>← Quay lại trang lập kế hoạch</button>
       </div>
     );
   }
@@ -53,25 +110,43 @@ const TripPlanResultPage = () => {
         <header style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/dashboard')}
               style={{ marginBottom: 12, background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, fontSize: '0.85rem' }}
             >
-              <FiArrowLeft /> Back to Planner
+              <FiArrowLeft /> Quay lại Dashboard
             </button>
             <h1 style={{ fontSize: '2rem', marginBottom: 6, color: 'var(--primary)' }}>
-              Your {overview?.total_days}-Day {overview?.destination} Adventure
+              Hành trình {overview?.total_days} ngày khám phá {overview?.destination}
             </h1>
             <p style={{ color: 'var(--text-secondary)' }}>
-              {overview?.start_date} → {overview?.end_date} · {overview?.group_size} {Number(overview?.group_size) === 1 ? 'person' : 'people'}
+              {overview?.start_date} → {overview?.end_date} · {overview?.group_size} người
             </p>
           </div>
-          <button
-            className="btn-premium btn-secondary"
-            style={{ display: 'flex', alignItems: 'center', gap: 8 }}
-            onClick={() => navigator.clipboard?.writeText(window.location.href)}
-          >
-            Share Plan <FiShare2 />
-          </button>
+          
+          <div style={{ display: 'flex', gap: 12 }}>
+            {result?.db_schema && (
+              <button
+                className="btn-premium btn-secondary"
+                style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: isSaved ? 'var(--primary)' : undefined,
+                  color: isSaved ? '#fff' : undefined,
+                  borderColor: isSaved ? 'var(--primary)' : undefined
+                }}
+                onClick={handleSavePlan}
+                disabled={isSaving || isSaved}
+              >
+                {isSaving ? 'Đang lưu...' : isSaved ? 'Đã lưu vào Dashboard' : 'Lưu Kế Hoạch'} <FiSave />
+              </button>
+            )}
+            <button
+              className="btn-premium btn-secondary"
+              style={{ display: 'flex', alignItems: 'center', gap: 8 }}
+              onClick={() => navigator.clipboard?.writeText(window.location.href)}
+            >
+              Chia sẻ <FiShare2 />
+            </button>
+          </div>
         </header>
 
         {/* ── Status message ── */}
@@ -98,7 +173,7 @@ const TripPlanResultPage = () => {
               <Link
                 key={day.day}
                 to={`/trip-plan/day/${day.day}`}
-                state={{ dayData: day, tripOverview: overview }}
+                state={{ ...location.state, result, dayData: day, tripOverview: overview }}
                 style={{ textDecoration: 'none' }}
               >
                 <div
@@ -153,9 +228,9 @@ const TripPlanResultPage = () => {
                   {/* Day summary row */}
                   <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
                     <span>💰 {fmt(day.day_summary?.total_cost)} ₫</span>
-                    <span>🎯 {day.day_summary?.activities_count} activities</span>
-                    <span>🍽️ {day.day_summary?.meals_count} meals</span>
-                    <span style={{ color: 'var(--primary)', fontWeight: 600 }}>View full schedule →</span>
+                    <span>🎯 {day.day_summary?.activities_count} hoạt động</span>
+                    <span>🍽️ {day.day_summary?.meals_count} bữa ăn</span>
+                    <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Xem chi tiết →</span>
                   </div>
                 </div>
               </Link>
@@ -167,18 +242,18 @@ const TripPlanResultPage = () => {
 
             {/* Budget card */}
             <div className="card-premium">
-              <h3 style={{ marginBottom: 16, color: 'var(--text-primary)' }}>💰 Budget Summary</h3>
+              <h3 style={{ marginBottom: 16, color: 'var(--text-primary)' }}>💰 Tóm tắt Ngân sách</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Total Budget</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Tổng Ngân sách</span>
                   <span style={{ fontWeight: 600 }}>{fmt(overview?.travel_budget)} ₫</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Estimated Cost</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Chi phí ước tính</span>
                   <span style={{ fontWeight: 600 }}>{fmt(overview?.total_estimated_cost)} ₫</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Per Person</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Mỗi người</span>
                   <span style={{ fontWeight: 600 }}>
                     {fmt(Math.round((overview?.total_estimated_cost || 0) / Math.max(overview?.group_size || 1, 1)))} ₫
                   </span>
@@ -186,7 +261,7 @@ const TripPlanResultPage = () => {
                 {/* Utilization bar */}
                 <div style={{ marginTop: 8 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: 4 }}>
-                    <span style={{ color: 'var(--text-secondary)' }}>Budget used</span>
+                    <span style={{ color: 'var(--text-secondary)' }}>Ngân sách đã dùng</span>
                     <span style={{ fontWeight: 600, color: scoreColor(100 - (overview?.budget_utilization_pct || 0)) }}>
                       {overview?.budget_utilization_pct?.toFixed(1)}%
                     </span>
@@ -206,15 +281,15 @@ const TripPlanResultPage = () => {
 
             {/* Validation score card */}
             <div className="card-premium">
-              <h3 style={{ marginBottom: 16, color: 'var(--text-primary)' }}>📊 Plan Score</h3>
+              <h3 style={{ marginBottom: 16, color: 'var(--text-primary)' }}>📊 Điểm Kế Hoạch</h3>
               {/* Big score */}
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <div style={{ fontSize: '3rem', fontWeight: 800, color: scoreColor(overall_score), lineHeight: 1 }}>
                   {Math.round(overall_score)}
                 </div>
-                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>out of 100</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>trên 100</div>
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                  {statusIcon(status)} {status?.replace('_', ' ')}
+                  {statusIcon(status)} {status === 'APPROVED' ? 'TỐT' : status === 'NEEDS_IMPROVEMENT' ? 'CẦN CẢI THIỆN' : 'KHÔNG ĐẠT'}
                 </div>
               </div>
               {/* Category bars */}
@@ -240,7 +315,7 @@ const TripPlanResultPage = () => {
             {/* Highlights */}
             {overview?.highlights?.length > 0 && (
               <div className="card-premium" style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'var(--primary)' }}>
-                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)' }}>🌟 Highlights</h3>
+                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)' }}>🌟 Điểm nổi bật</h3>
                 {overview.highlights.map((h, i) => (
                   <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     <span>•</span><span>{h}</span>
@@ -252,7 +327,7 @@ const TripPlanResultPage = () => {
             {/* Recommendations */}
             {recommendations.length > 0 && (
               <div className="card-premium">
-                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)' }}>💡 Suggestions</h3>
+                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)' }}>💡 Gợi ý cải thiện</h3>
                 {recommendations.slice(0, 3).map((r, i) => (
                   <div key={i} style={{ marginBottom: 10, fontSize: '0.85rem', color: 'var(--text-secondary)', paddingLeft: 8, borderLeft: '3px solid var(--primary)' }}>
                     <strong style={{ color: 'var(--text-primary)' }}>[{r.priority}]</strong> {r.suggestion}
