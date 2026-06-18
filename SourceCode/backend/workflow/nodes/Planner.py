@@ -19,7 +19,7 @@ class SelectedAccommodation(BaseModel):
     name: str = Field(description="Tên nơi ở")
     price_per_night: int = Field(description="Giá một đêm (VNĐ)")
     ward_name: str = Field(description="Tên phường/xã nơi khách sạn tọa lạc")
-    description: str = Field(description="Lý do chọn nơi ở này (VD: Gần biển, đúng budget, phù hợp gia đình)")
+    description: str = Field(description="Lý do chọn nơi ở này (VD: Gần biển, đúng budget, phù hợp gia đình), tối đa 15 chữ")
 
 class SelectedActivity(BaseModel):
     locationId: str = Field(description="ID của địa điểm được chọn từ Database Context")
@@ -28,13 +28,13 @@ class SelectedActivity(BaseModel):
     estimated_duration_minutes: int = Field(description="Thời gian dự kiến (phút)")
     estimated_cost: int = Field(description="Chi phí dự kiến (VNĐ)")
     suitability_for: List[str] = Field(description="Đối tượng phù hợp (VD: Family, Couples, Solo)")
-    note: str = Field(description="Ghi chú thêm (VD: Nên đi buổi sáng, cần đặt trước)")
+    note: str = Field(description="Ghi chú thêm (VD: Nên đi buổi sáng, cần đặt trước), tối đa 15 chữ")
 
 class SelectedEatery(BaseModel):
     locationId: str = Field(description="ID của quán ăn từ Database Context")
     name: str = Field(description="Tên quán ăn")
     price_per_person: int = Field(description="Giá trung bình mỗi người (VNĐ)")
-    description: str = Field(description="Lý do chọn quán ăn này (VD: Đặc sản địa phương, phù hợp trẻ em)")
+    description: str = Field(description="Lý do chọn quán ăn này (VD: Đặc sản địa phương, phù hợp trẻ em), tối đa 15 chữ")
 
 class PlannerOutput(BaseModel):
     accommodation: List[SelectedAccommodation] = Field(description="Danh sách nơi ở được chọn.")
@@ -57,11 +57,13 @@ planner_prompt = ChatPromptTemplate.from_messages([
 
     [BƯỚC 1 — PHỄU LỌC CỨNG (Loại bỏ không khả thi)]
     Duyệt qua từng địa điểm và loại bỏ nếu vi phạm BẤT KỲ điều kiện nào:
-    1. NGÂN SÁCH: (estimatedPrice * group_size) vượt quá phần ngân sách còn lại (travel_budget). Chú ý: estimatedPrice trong database là giá CHO 1 NGƯỜI, bạn phải nhân với số người (group_size).
-    2. SỨC KHỎE & THỂ LỰC: estimatedDuration quá dài hoặc địa điểm đòi hỏi thể lực không phù hợp với age_range, health_limitations, mobility_limitations.
+    1. NGÂN SÁCH: Chọn ra một tập hợp các địa điểm (Ít nhất 1 Nơi ở, nhiều Hoạt động, nhiều Quán ăn) sao cho TỔNG CHI PHÍ không vượt quá NGÂN SÁCH ({total_budget} VND). 
+       - Lưu ý 1: `estimatedPrice` của Khách sạn (Stay) là giá cho 1 phòng/đêm, bạn phải nhân lên số đêm.
+       - Lưu ý 2: `estimatedPrice` của Hoạt động/Quán ăn là giá cho 1 NGƯỜI, bạn phải nhân với số người (group_size).
+       - TUYỆT ĐỐI KHÔNG BỎ TRỐNG NƠI Ở VÀ HOẠT ĐỘNG. Nếu ngân sách eo hẹp, hãy BẮT BUỘC chọn các địa điểm rẻ nhất hoặc các hoạt động tham quan miễn phí (giá 0đ). Việc không trả về nơi lưu trú là một lỗi nghiêm trọng.
+    2. SỨC KHỎE & THỂ LỰC: estimatedDuration quá dài hoặc địa điểm đòi hỏi thể lực không phù hợp với age_range, health_limitations.
     3. THỜI GIAN: Tổng thời gian các hoạt động trong ngày không vượt quá daily_active_hours.
     4. VÙNG CẤM: Địa điểm có tên xuất hiện trong places_of_limitation → loại bỏ.
-    5. NHÓM: Địa điểm không phù hợp group_size (VD: tour ghép giới hạn số người).
 
     [BƯỚC 2 — ƯU TIÊN & CHẤM ĐIỂM (Sắp xếp khả thi)]
     Sau khi lọc, ưu tiên địa điểm dựa trên:
@@ -75,9 +77,9 @@ planner_prompt = ChatPromptTemplate.from_messages([
     - Chọn ít nhất 2 quán ăn đa dạng (sáng/trưa/tối).
     - Ghi rõ lý do chọn vào trường `note` của mỗi địa điểm.
     - CẢNH BÁO NGHIÊM TRỌNG: CHỈ chọn địa điểm có thật trong [DATABASE CONTEXT]. TUYỆT ĐỐI KHÔNG trả về các giá trị rác, dữ liệu mẫu như "string" hay tự bịa ra địa điểm. Nếu không có gì phù hợp, hãy trả về danh sách rỗng [].
-    """),
-        ("human", """
+    
     Hãy tìm ra các địa điểm hoạt động, địa điểm ăn uống, chỗ ở, và các hoạt động khác phù hợp với yêu cầu chuyến đi của người dùng. Các thông tin về chuyến đi như sau:
+    - Tổng Ngân Sách:      {total_budget} VNĐ
     - TripMetadata:        {trip_metadata}
     - TravelPreferences:   {travel_preferences}
     - Constraints:         {constraints}
@@ -97,14 +99,13 @@ llm = LLM(
 
 # Category groupings
 STAY_CATS     = ["Stay"]
-ACTIVITY_CATS = ["Sightseeing", "Entertainment", "Culture"]
+ACTIVITY_CATS = ["Sightseeing", "Entertainment", "Culture", "nature"]
 FOOD_CATS     = ["Food"]
 
 PROJECTION = {
     "_id": 0,
     "locationId": 1,
     "name": 1,
-    "description": 1,
     "category": 1,
     "estimatedDuration": 1,
     "estimatedPrice": 1,
@@ -149,13 +150,13 @@ def fetch_locations_from_mongo(ward_names: list[str]) -> dict:
 
     hotels = list(col.find(
         {**query_base, "category": {"$in": STAY_CATS}}, PROJECTION
-    ))
+    ).limit(20))
     activities = list(col.find(
         {**query_base, "category": {"$in": ACTIVITY_CATS}}, PROJECTION
-    ))
+    ).limit(20))
     eateries = list(col.find(
         {**query_base, "category": {"$in": FOOD_CATS}}, PROJECTION
-    ))
+    ).limit(20))
 
     return {"hotels": hotels, "activities": activities, "eateries": eateries}
 
@@ -181,6 +182,13 @@ def Planner_node(state: State) -> State:
             
     ward_names = list(set(ward_names))
     db_context = fetch_locations_from_mongo(ward_names)
+    
+    total_budget = state.get("total_budget") or constraints.get("travel_budget", 0)
+    if isinstance(total_budget, str):
+        import re
+        nums = re.findall(r"[\d\.]+", total_budget.replace(",", ""))
+        total_budget = float(nums[0]) if nums else 0.0
+    
     prompt_value = planner_prompt.format(
         db_hotels=json.dumps(db_context["hotels"], ensure_ascii=False),
         db_activities=json.dumps(db_context["activities"], ensure_ascii=False),
@@ -188,6 +196,7 @@ def Planner_node(state: State) -> State:
         trip_metadata=trip_metadata,
         travel_preferences=travel_preferences,
         constraints=constraints,
+        total_budget=total_budget,
     )
     
     response_str = llm.invoke(prompt_value)

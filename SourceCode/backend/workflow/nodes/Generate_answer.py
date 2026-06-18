@@ -66,7 +66,6 @@ class ResponseSection:
 class FullTripResponse(BaseModel):
     """Pydantic model for structured Gemini output"""
     summary: str = Field(description="Tóm tắt chuyến đi 2-3 câu")
-    itinerary: str = Field(description="Lịch trình chi tiết từng ngày dạng markdown, viết súc tích")
     costs: str = Field(description="Phân tích chi phí và ngân sách ngắn gọn")
     logistics: str = Field(description="Thông tin hậu cần, di chuyển, visa")
     recommendations: str = Field(description="Lời khuyên và mẹo du lịch, gạch đầu dòng")
@@ -306,7 +305,6 @@ class ResponseFormatter:
     
     SECTION_TITLES = {
         "summary": "Tóm tắt chuyến đi",
-        "itinerary": "Lịch trình chi tiết",
         "costs": "Tóm tắt chi phí",
         "logistics": "Thông tin hậu cần",
         "recommendations": "Gợi ý & Lời khuyên"
@@ -458,7 +456,7 @@ def generate_answer_node(state: Dict[str, Any]) -> Dict[str, Any]:
     result_data = llm.generate_full_response(prompt) or {}
     sections = [
         response_formatter.format_section(result_data.get(k, ""), k)
-        for k in ["summary", "itinerary", "costs", "logistics", "recommendations"]
+        for k in ["summary", "costs", "logistics", "recommendations"]
     ]
     # 4. Assemble final response
     final_response = response_formatter.assemble_response(sections, trip_data)
