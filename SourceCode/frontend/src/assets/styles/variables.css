@@ -1,10 +1,10 @@
 :root {
   /* Colors */
-  --primary: #10b981;
-  --primary-hover: #059669;
-  --secondary: #14b8a6;
-  --accent: #06b6d4;
-  --primary-light: rgba(16, 185, 129, 0.1);
+  --primary: #0194f3;
+  --primary-hover: #007ce8;
+  --secondary: #00a1ff;
+  --accent: #ff5e1f;
+  --primary-light: rgba(1, 148, 243, 0.1);
   
   --bg-main: #f8fafc;
   --bg-sidebar: #ffffff;
@@ -16,6 +16,9 @@
   
   --bg-glass: rgba(255, 255, 255, 0.9);
   --border-light: #e2e8f0;
+  
+  --bg-overlay-start: rgba(248, 250, 252, 0.5);
+  --bg-overlay-end: rgba(248, 250, 252, 0.7);
   
   /* Layout */
   --navbar-height: 70px;
@@ -42,4 +45,7 @@
   --text-secondary: #94a3b8;
   --bg-glass: rgba(15, 23, 42, 0.85);
   --border-light: #334155;
+  
+  --bg-overlay-start: rgba(15, 23, 42, 0.6);
+  --bg-overlay-end: rgba(15, 23, 42, 0.8);
 }

@@ -17,14 +17,14 @@ from dotenv import load_dotenv
 load_dotenv()
 logger = logging.getLogger(__name__)
 
-# ── Singletons ────────────────────────────────────────────────────────────────
-_mongo_client: Optional[MongoClient] = None
+# Singletons 
+_mongo_client: MongoClient = None
 _neo4j_driver = None
 
 
-# ── MongoDB ───────────────────────────────────────────────────────────────────
+# MongoDB
 
-def _get_mongo_client() -> MongoClient:
+def get_mongo_client() -> MongoClient:
     global _mongo_client
     if _mongo_client is None:
         uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
@@ -48,12 +48,12 @@ def _get_mongo_client() -> MongoClient:
 def get_travel_db():
     """Return TravelDB database handle."""
     db_name = os.getenv("MONGO_DB_NAME", "TravelDB")
-    return _get_mongo_client()[db_name]
+    return get_mongo_client()[db_name]
 
 
-# ── Trip helpers ──────────────────────────────────────────────────────────────
+# Trip helpers
 
-def _serialize(doc: dict) -> dict:
+def serialize(doc: dict) -> dict:
     """Convert ObjectId fields to strings so the doc is JSON-serialisable."""
     if doc is None:
         return {}
@@ -62,9 +62,9 @@ def _serialize(doc: dict) -> dict:
         if isinstance(v, ObjectId):
             out[k] = str(v)
         elif isinstance(v, dict):
-            out[k] = _serialize(v)
+            out[k] = serialize(v)
         elif isinstance(v, list):
-            out[k] = [_serialize(i) if isinstance(i, dict) else
+            out[k] = [serialize(i) if isinstance(i, dict) else
                       (str(i) if isinstance(i, ObjectId) else i)
                       for i in v]
         else:
@@ -81,7 +81,7 @@ def get_trips_for_user(user_id: str) -> List[Dict[str, Any]]:
             {"_id": 1, "tripId": 1, "destination": 1, "status": 1,
              "totalBudget": 1, "createdAt": 1}
         ).sort("createdAt", -1)
-        return [_serialize(doc) for doc in cursor]
+        return [serialize(doc) for doc in cursor]
     except Exception as exc:
         logger.error(f"get_trips_for_user error: {exc}")
         return []
@@ -92,7 +92,7 @@ def get_trip_by_id(trip_id: str) -> Optional[Dict[str, Any]]:
     try:
         db = get_travel_db()
         doc = db["Trips"].find_one({"tripId": trip_id})
-        return _serialize(doc) if doc else None
+        return serialize(doc) if doc else None
     except Exception as exc:
         logger.error(f"get_trip_by_id error: {exc}")
         return None
@@ -105,7 +105,7 @@ def get_day_details_for_trip(trip_id: str) -> List[Dict[str, Any]]:
         cursor = db["DayDetails"].find(
             {"tripId": trip_id}
         ).sort("dayNumber", 1)
-        return [_serialize(doc) for doc in cursor]
+        return [serialize(doc) for doc in cursor]
     except Exception as exc:
         logger.error(f"get_day_details_for_trip error: {exc}")
         return []
@@ -173,7 +173,6 @@ def save_full_trip(trip_id: str, trip_doc: Dict[str, Any],
 
 
 def add_activity_to_day(trip_id: str, day_number: int, new_activity: Dict[str, Any]) -> bool:
-    """Thêm một hoạt động mới vào một ngày cụ thể của chuyến đi."""
     try:
         db = get_travel_db()
         result = db["DayDetails"].update_one(
@@ -186,7 +185,6 @@ def add_activity_to_day(trip_id: str, day_number: int, new_activity: Dict[str, A
         return False
 
 def remove_activity_from_day(trip_id: str, day_number: int, activity_name: str) -> bool:
-    """Xóa một hoạt động khỏi một ngày cụ thể (dựa vào tên hoạt động chứa chuỗi tương đối)."""
     try:
         db = get_travel_db()
         # Find the day document first to handle case-insensitive or partial match
@@ -210,7 +208,6 @@ def remove_activity_from_day(trip_id: str, day_number: int, activity_name: str) 
         return False
 
 def update_activity_in_day(trip_id: str, day_number: int, old_activity_name: str, new_activity: Dict[str, Any]) -> bool:
-    """Cập nhật một hoạt động bằng cách thay thế hoạt động cũ bằng hoạt động mới."""
     try:
         db = get_travel_db()
         day_doc = db["DayDetails"].find_one({"tripId": trip_id, "dayNumber": day_number})
@@ -221,7 +218,10 @@ def update_activity_in_day(trip_id: str, day_number: int, old_activity_name: str
         updated = False
         for i, act in enumerate(acts):
             if old_activity_name.lower() in str(act.get("name", "")).lower():
-                acts[i] = new_activity
+                # Merge fields to preserve existing startTime, endTime, and location
+                for k, v in new_activity.items():
+                    if v != "":
+                        act[k] = v
                 updated = True
                 break # Only replace the first match
                 
@@ -239,8 +239,7 @@ def update_activity_in_day(trip_id: str, day_number: int, old_activity_name: str
 
 
 
-# ── Location helpers (MongoDB Locations collection) ───────────────────────────
-
+# Location helpers (MongoDB Locations collection) 
 def search_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
     """Simple text search on the Locations collection."""
     try:
@@ -251,7 +250,7 @@ def search_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
             {"_id": 1, "name": 1, "category": 1, "address": 1,
              "description": 1, "price_range": 1, "image_url": 1}
         ).limit(limit)
-        return [_serialize(doc) for doc in cursor]
+        return [serialize(doc) for doc in cursor]
     except Exception as exc:
         logger.error(f"search_locations error: {exc}")
         return []
@@ -270,13 +269,13 @@ def get_locations_by_category(category: str, destination: str = "",
             {"_id": 1, "name": 1, "category": 1, "address": 1,
              "description": 1, "price_range": 1, "image_url": 1}
         ).limit(limit)
-        return [_serialize(doc) for doc in cursor]
+        return [serialize(doc) for doc in cursor]
     except Exception as exc:
         logger.error(f"get_locations_by_category error: {exc}")
         return []
 
 
-# ── Neo4j helpers ─────────────────────────────────────────────────────────────
+# Neo4j helpers
 
 def _get_neo4j_driver():
     global _neo4j_driver

@@ -18,7 +18,7 @@ MAX_VALIDATION_ITERATIONS = 3
 MIN_ACCEPTABLE_SCORE = 70.0
 
 
-def route_after_validation(state: State) -> Literal["scheduling", "generate_answer"]:
+def route_after_validation(state: State) -> Literal["planner", "mobility", "scheduling", "generate_answer"]:
     """
     Conditional routing after the validation node.
 
@@ -29,6 +29,7 @@ def route_after_validation(state: State) -> Literal["scheduling", "generate_answ
     """
     validation = state.get("validation", {})
     overall_score = validation.get("overall_score", 0)
+    issues = validation.get("issues", [])
     iteration = state.get("validation_iteration", 1)
 
     if overall_score >= MIN_ACCEPTABLE_SCORE:
@@ -36,6 +37,15 @@ def route_after_validation(state: State) -> Literal["scheduling", "generate_answ
 
     if iteration >= MAX_VALIDATION_ITERATIONS:
         return "generate_answer"
+
+    # Phân tích lỗi để điều hướng về đúng Node
+    issues_str = " ".join([str(i) for i in issues]).lower()
+    
+    if "địa điểm" in issues_str or "ngân sách" in issues_str or "place" in issues_str or "budget" in issues_str:
+        return "planner"
+        
+    if "di chuyển" in issues_str or "khoảng cách" in issues_str or "phương tiện" in issues_str or "route" in issues_str or "distance" in issues_str:
+        return "mobility"
 
     return "scheduling"
 
@@ -61,12 +71,14 @@ def build_workflow():
     workflow.add_edge("planner",    "mobility")
     workflow.add_edge("mobility",   "scheduling")
 
-    # Validation feedback loop: scheduling → validation → (scheduling | generate_answer)
+    # Validation feedback loop: scheduling → validation → (planner | mobility | scheduling | generate_answer)
     workflow.add_edge("scheduling", "validation")
     workflow.add_conditional_edges(
         "validation",
         route_after_validation,
         {
+            "planner":         "planner",
+            "mobility":        "mobility",
             "scheduling":      "scheduling",
             "generate_answer": "generate_answer",
         },

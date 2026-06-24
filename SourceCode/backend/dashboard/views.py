@@ -47,6 +47,7 @@ def dashboard_stats(request, user_id: str):
     try:
         db = get_mongo_db("TravelDB")
         trips_col = db["Trips"]
+        day_details_col = db["DayDetails"]
 
         # All trips for user
         all_trips = list(trips_col.find(
@@ -55,11 +56,51 @@ def dashboard_stats(request, user_id: str):
              "totalBudget": 1, "createdAt": 1}
         ).sort("createdAt", -1))
 
+        # Fallback to demo data if user has no trips
+        if len(all_trips) == 0 and user_id != "U001":
+            all_trips = list(trips_col.find(
+                {"userId": "U001"},
+                {"_id": 0, "tripId": 1, "destination": 1, "status": 1,
+                 "totalBudget": 1, "createdAt": 1}
+            ).sort("createdAt", -1))
+
         total_trips = len(all_trips)
         upcoming = sum(1 for t in all_trips if t.get("status") in ("PLANNING", "CONFIRMED"))
 
+        # Calculate total budget
+        total_budget = sum(float(t.get("totalBudget", 0)) for t in all_trips)
+
         # Unique destinations (countries / cities)
         destinations = list({t.get("destination", "") for t in all_trips if t.get("destination")})
+
+        # Calculate trips per month
+        from collections import defaultdict
+        import datetime
+        trips_per_month_dict = defaultdict(int)
+        for t in all_trips:
+            created_at = t.get("createdAt")
+            if isinstance(created_at, datetime.datetime):
+                month_str = created_at.strftime("%Y-%m")
+                trips_per_month_dict[month_str] += 1
+            elif isinstance(created_at, str) and len(created_at) >= 7:
+                month_str = created_at[:7]
+                trips_per_month_dict[month_str] += 1
+        
+        trips_per_month = [{"month": k, "count": v} for k, v in sorted(trips_per_month_dict.items())]
+
+        # Calculate cost distribution by category from DayDetails
+        trip_ids = [t.get("tripId") for t in all_trips if t.get("tripId")]
+        cost_dist_dict = defaultdict(float)
+        
+        if trip_ids:
+            day_details = list(day_details_col.find({"tripId": {"$in": trip_ids}}))
+            for day in day_details:
+                for act in day.get("dayActs", []):
+                    act_type = act.get("type", "Other")
+                    price = float(act.get("price", 0))
+                    cost_dist_dict[act_type] += price
+                    
+        cost_distribution = [{"category": k, "amount": v} for k, v in cost_dist_dict.items()]
 
         # All trips sorted by newest
         recent_trips = [_serialize(t) for t in all_trips]
@@ -70,8 +111,11 @@ def dashboard_stats(request, user_id: str):
             "stats": {
                 "total_trips": total_trips,
                 "upcoming": upcoming,
+                "total_budget": total_budget,
                 "destinations_count": len(destinations),
                 "destinations": destinations[:8],
+                "trips_per_month": trips_per_month,
+                "cost_distribution": cost_distribution
             },
             "recent_trips": recent_trips,
         })

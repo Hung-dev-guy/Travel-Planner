@@ -96,6 +96,7 @@ def login(request):
                 "userId": user["userId"],
                 "username": user["username"],
                 "full_name": user.get("full_name", ""),
+                "role": user.get("role", "user"),
                 "preferences": user.get("preferences", []),
                 "can_auto_update_preferences": can_auto_update_preferences
             }
@@ -129,6 +130,7 @@ def register(request):
             "username": username,
             "password": make_password(password),
             "full_name": full_name,
+            "role": "user",
             "preferences": [],
             "last_update_trip_count": 0,
             "createdAt": datetime.utcnow()
@@ -142,6 +144,7 @@ def register(request):
                 "userId": user_id,
                 "username": username,
                 "full_name": full_name,
+                "role": "user",
                 "preferences": []
             }
         })

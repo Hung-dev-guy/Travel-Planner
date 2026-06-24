@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { FiArrowLeft, FiClock, FiMapPin } from 'react-icons/fi';
+import destinationService from '../../services/destinationService';
 
 const fmt = (n) => Number(n || 0).toLocaleString('vi-VN');
 
@@ -11,22 +12,22 @@ const itemIcon = (type) => {
 
 const typeBadgeColor = (type) => {
   const map = {
-    activity:      { bg: 'rgba(16,185,129,0.12)', color: '#10b981' },
-    meal:          { bg: 'rgba(245,158,11,0.12)',  color: '#f59e0b' },
-    accommodation: { bg: 'rgba(139,92,246,0.12)',  color: '#8b5cf6' },
+    activity: { bg: 'rgba(16,185,129,0.12)', color: '#10b981' },
+    meal: { bg: 'rgba(245,158,11,0.12)', color: '#f59e0b' },
+    accommodation: { bg: 'rgba(139,92,246,0.12)', color: '#8b5cf6' },
     transportation: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
-    transport:      { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
+    transport: { bg: 'rgba(59,130,246,0.12)', color: '#3b82f6' },
   };
   return map[type] || { bg: 'rgba(100,116,139,0.12)', color: '#64748b' };
 };
 
 const TripDayDetailPage = () => {
-  const { dayId }  = useParams();
-  const navigate   = useNavigate();
-  const location   = useLocation();
+  const { dayId } = useParams();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   // Prefer real day data from router state; fall back to placeholder
-  const dayData     = location.state?.dayData;
+  const dayData = location.state?.dayData;
   const tripOverview = location.state?.tripOverview;
 
   // ── Fallback placeholder ────────────────────────────────────────────────────
@@ -45,6 +46,50 @@ const TripDayDetailPage = () => {
   }
 
   const { day, date, title, items = [], day_summary = {} } = dayData;
+
+  // Tự động tính toán các thông số thay vì phụ thuộc hoàn toàn vào LLM sinh ra
+  const calcTotalCost = items.reduce((acc, item) => acc + (Number(item.cost) || 0), 0);
+  const calcActs = items.filter(i => ['activity', 'sightseeing'].includes(i.type?.toLowerCase())).length;
+  const calcMeals = items.filter(i => ['meal', 'food', 'restaurant'].includes(i.type?.toLowerCase())).length;
+  const travelCount = items.filter(i => ['transportation', 'transport'].includes(i.type?.toLowerCase())).length;
+
+  const displayCost = calcTotalCost > 0 ? calcTotalCost : (day_summary.total_cost || 0);
+  const displayActs = calcActs > 0 ? calcActs : (day_summary.activities_count || 0);
+  const displayMeals = calcMeals > 0 ? calcMeals : (day_summary.meals_count || 0);
+  const displayTravel = day_summary.travel_time_hours || (travelCount * 0.5) || 1;
+  const displayEnergy = day_summary.energy_level || 'moderate';
+
+  const [dbImages, setDbImages] = useState({});
+
+  useEffect(() => {
+    // Lấy danh sách locations từ database để map ảnh
+    destinationService.getLocations('All', '').then(res => {
+      if (res.data?.success) {
+        const locations = res.data.locations || [];
+        const imageMap = {};
+        
+        items.forEach(item => {
+          let currentImg = item.image || item.img_url;
+          if (!currentImg || currentImg.includes('default.jpg')) {
+             const itemName = item.name?.toLowerCase() || '';
+             const itemLocation = (typeof item.location === 'string' ? item.location : '').toLowerCase();
+             
+             // Tìm location tương ứng trong CSDL
+             const matchedLoc = locations.find(loc => {
+               const locName = loc.name?.toLowerCase();
+               if (!locName) return false;
+               return itemName.includes(locName) || itemLocation.includes(locName) || locName.includes(itemName) || locName.includes(itemLocation);
+             });
+             
+             if (matchedLoc && matchedLoc.img_url) {
+               imageMap[item.name] = matchedLoc.img_url;
+             }
+          }
+        });
+        setDbImages(imageMap);
+      }
+    }).catch(err => console.error('Error fetching DB locations:', err));
+  }, [items]);
 
   return (
     <div className="content" style={{ paddingBottom: '60px' }}>
@@ -95,11 +140,11 @@ const TripDayDetailPage = () => {
           borderRadius: 12,
           fontSize: '0.875rem',
         }}>
-          <span>💰 <strong>{fmt(day_summary.total_cost)} ₫</strong></span>
-          <span>🎯 <strong>{day_summary.activities_count}</strong> activities</span>
-          <span>🍽️ <strong>{day_summary.meals_count}</strong> meals</span>
-          <span>🕐 <strong>{day_summary.travel_time_hours}h</strong> travel</span>
-          <span>⚡ <strong style={{ textTransform: 'capitalize' }}>{day_summary.energy_level}</strong> energy</span>
+          <span>💰 <strong>{fmt(displayCost)} ₫</strong></span>
+          <span>🎯 <strong>{displayActs}</strong> activities</span>
+          <span>🍽️ <strong>{displayMeals}</strong> meals</span>
+          <span>🕐 <strong>{displayTravel}h</strong> travel</span>
+          <span>⚡ <strong style={{ textTransform: 'capitalize' }}>{displayEnergy}</strong> energy</span>
         </div>
 
         {/* Schedule items */}
@@ -125,11 +170,20 @@ const TripDayDetailPage = () => {
 
                 {/* Content */}
                 <div style={{ flex: 1, display: 'flex', gap: 16, flexDirection: window.innerWidth < 600 ? 'column' : 'row' }}>
-                  {item.image && (
-                    <div style={{ width: 120, height: 100, flexShrink: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-light)' }}>
-                      <img src={item.image} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </div>
-                  )}
+                  {(() => {
+                    let imgSrc = item.image || item.img_url;
+                    if (!imgSrc || imgSrc.includes('default.jpg')) {
+                      imgSrc = dbImages[item.name];
+                    }
+                    if (imgSrc) {
+                      return (
+                        <div style={{ width: 120, height: 100, flexShrink: 0, borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border-light)' }}>
+                          <img src={imgSrc} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                   <div style={{ flex: 1 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
                       <div>

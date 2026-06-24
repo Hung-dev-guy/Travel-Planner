@@ -11,12 +11,13 @@ Graph flow:
 import logging
 import operator
 from typing import TypedDict, Annotated, Sequence, Optional, List
-
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.messages import BaseMessage, HumanMessage, AIMessage, ToolMessage
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-
+from .prompts import TRAVEL_ADVISOR_SYSTEM_PROMPT, TRIP_CONTEXT_TEMPLATE
+from .memory import MemoryManager
+from .db import get_full_trip_context
 from .tools import (
     get_trip_details,
     search_alternative_hotels,
@@ -29,16 +30,13 @@ from .tools import (
     classify_query_type,
     direct_response,
     update_trip_activity,
+    update_transport_options,  
     add_new_activity,
     remove_activity,
 )
-from .prompts import TRAVEL_ADVISOR_SYSTEM_PROMPT, TRIP_CONTEXT_TEMPLATE
-from .memory import MemoryManager
-from .db import get_full_trip_context
 
 logger = logging.getLogger(__name__)
 
-# All tools that the agent can call
 ALL_TOOLS = [
     get_trip_details,
     search_alternative_hotels,
@@ -49,73 +47,53 @@ ALL_TOOLS = [
     search_destination_info,
     summarize_conversation,
     update_trip_activity,
+    update_transport_options,
     add_new_activity,
     remove_activity,
 ]
 
-
 # ── State ──────────────────────────────────────────────────────────────────────
-
 class AgentState(TypedDict):
     """State shared across all nodes in the LangGraph."""
-    # Core
     input: str
     user_id: str
-    trip_id: Optional[str]           # Currently selected trip
+    trip_id: str        
     messages: Annotated[Sequence[BaseMessage], operator.add]
-
-    # Trip context (injected before agent call)
     trip_context: Optional[str]
-
     # Memory
     memory_manager: Optional[MemoryManager]
     short_term_memory: Optional[Sequence[BaseMessage]]
     conversation_summaries: Optional[list]
-
     # Classification
     needs_retrieval: Optional[bool]
     query_type: Optional[str]
     confidence: Optional[float]
 
 
-# ── Graph factory ──────────────────────────────────────────────────────────────
-
+# Graph factory 
 def create_agent_graph(llm):
     """Build and compile the LangGraph travel advisor agent."""
     llm_with_tools = llm.bind_tools(ALL_TOOLS)
-
-    # ── Node: memory_init ─────────────────────────────────────────────────────
+    # Node: memory_init 
     def memory_init_node(state: AgentState) -> dict:
         logger.info("[Node] memory_init")
-        try:
-            mm = MemoryManager.from_env()
-            short_term = mm.load_short_term_memory(state["user_id"])
-            summaries = mm.get_conversation_summaries(state["user_id"], limit=5)
-            return {
-                "memory_manager": mm,
-                "short_term_memory": short_term,
-                "conversation_summaries": summaries,
-            }
-        except Exception as exc:
-            logger.error(f"memory_init_node error: {exc}")
-            return {
-                "memory_manager": None,
-                "short_term_memory": [],
-                "conversation_summaries": [],
-            }
+        mm = MemoryManager.from_env()
+        short_term = mm.load_short_term_memory(state["user_id"])
+        summaries = mm.get_conversation_summaries(state["user_id"], limit=5)
+        return {
+            "memory_manager": mm,
+            "short_term_memory": short_term,
+            "conversation_summaries": summaries,
+        }
 
-    # ── Node: classify_query ──────────────────────────────────────────────────
+    # Node: classify_query 
     def classify_query_node(state: AgentState) -> dict:
         logger.info(f"[Node] classify_query: '{state['input'][:80]}'")
-        try:
-            result = classify_query_type.invoke({"user_query": state["input"]})
-            logger.info(f"  → {result}")
-            return result
-        except Exception as exc:
-            logger.error(f"classify_query_node error: {exc}")
-            return {"needs_retrieval": True, "query_type": "trip_query", "confidence": 0.5}
+        result = classify_query_type.invoke({"user_query": state["input"]})
+        logger.info(f"  → {result}")
+        return result
 
-    # ── Node: retrieve_trip_context ───────────────────────────────────────────
+    # Node: retrieve_trip_context 
     def retrieve_trip_context_node(state: AgentState) -> dict:
         logger.info(f"[Node] retrieve_trip_context: trip_id={state.get('trip_id')}")
         trip_id = state.get("trip_id")
@@ -126,7 +104,6 @@ def create_agent_graph(llm):
             ctx = get_full_trip_context(trip_id)
             if not ctx:
                 return {"trip_context": f"Không tìm thấy kế hoạch du lịch ID: {trip_id}"}
-
             trip = ctx.get("trip", {})
             days = ctx.get("day_details", [])
 
@@ -168,17 +145,19 @@ def create_agent_graph(llm):
             logger.error(f"retrieve_trip_context_node error: {exc}")
             return {"trip_context": f"Lỗi khi tải dữ liệu chuyến đi: {exc}"}
 
-    # ── Node: agent ───────────────────────────────────────────────────────────
+    # Node: agent 
     def agent_node(state: AgentState) -> dict:
         logger.info("[Node] agent")
-
-        # Build message list
         messages = list(state["messages"])
 
-        # Prepend recent short-term memory for context
+        # Fetch recent history as context
         if state.get("short_term_memory"):
-            recent = list(state["short_term_memory"])[-6:]
-            messages = recent + messages
+            def is_normal_text_message(msg: BaseMessage) -> bool:
+                has_tool_calls = bool(getattr(msg, "tool_calls", None))
+                is_tool_result = (msg.type == "tool")
+                return not has_tool_calls and not is_tool_result
+            clean_memory = [msg for msg in state["short_term_memory"] if is_normal_text_message(msg)]
+            messages = clean_memory[-8:] + messages
 
         # Inject trip context as a system-style human message
         trip_context = state.get("trip_context", "")
@@ -190,32 +169,29 @@ def create_agent_graph(llm):
                 messages.insert(-1, ctx_msg)
             else:
                 messages.append(ctx_msg)
-
+        
         system_prompt = (
             f"User ID: {state['user_id']} | Trip ID: {state.get('trip_id', 'chưa chọn')}\n\n"
             f"{TRAVEL_ADVISOR_SYSTEM_PROMPT}"
         )
-
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             MessagesPlaceholder(variable_name="messages"),
         ])
         chain = prompt | llm_with_tools
-
         try:
             response = chain.invoke({"messages": messages})
         except Exception as exc:
             logger.error(f"agent_node LLM error: {exc}")
             error_msg = str(exc)
             if "429" in error_msg or "RESOURCE_EXHAUSTED" in error_msg:
-                user_friendly_msg = "Hệ thống AI đang quá tải (vượt quá giới hạn gọi API của Gemini). Vui lòng đợi khoảng 1 phút rồi thử lại nhé! ⏳"
+                user_friendly_msg = "Hệ thống đang quá tải (vượt quá giới hạn gọi API của Gemini). Vui lòng đợi khoảng 1 phút rồi thử lại nhé!"
             else:
                 user_friendly_msg = f"Xin lỗi, đã có lỗi xảy ra khi xử lý yêu cầu. Lỗi hệ thống: {error_msg}"
             response = AIMessage(content=user_friendly_msg)
-
         return {"messages": [response]}
 
-    # ── Node: direct_response ─────────────────────────────────────────────────
+    # Node: direct_response 
     def direct_response_node(state: AgentState) -> dict:
         logger.info(f"[Node] direct_response: type={state.get('query_type')}")
         try:
@@ -243,6 +219,7 @@ def create_agent_graph(llm):
                 texts = [
                     m.content[:200] for m in all_messages[-12:]
                     if isinstance(m, (HumanMessage, AIMessage))
+                    and isinstance(m.content, str)
                     and not m.content.startswith("[CONTEXT")
                     and len(m.content.strip()) > 15
                 ]
@@ -262,10 +239,10 @@ def create_agent_graph(llm):
             logger.error(f"memory_save_node error: {exc}")
         return {}
 
-    # ── Tool node ─────────────────────────────────────────────────────────────
+    # Tool node 
     tool_node = ToolNode(ALL_TOOLS)
 
-    # ── Routing helpers ───────────────────────────────────────────────────────
+    # Routing helpers
     def route_after_classification(state: AgentState) -> str:
         if state.get("needs_retrieval"):
             return "retrieve_trip_context"
@@ -277,7 +254,7 @@ def create_agent_graph(llm):
             return "tool_node"
         return "memory_save"
 
-    # ── Build graph ───────────────────────────────────────────────────────────
+    # Build graph 
     graph = StateGraph(AgentState)
     graph.add_node("memory_init", memory_init_node)
     graph.add_node("classify_query", classify_query_node)

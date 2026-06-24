@@ -22,7 +22,7 @@ Features:
 """
 
 from typing import Dict, List, Any, Optional, Tuple
-from dataclasses import dataclass
+from dataclasses import dataclass, asdict
 from enum import Enum
 import logging
 
@@ -55,15 +55,6 @@ class ValidationIssue:
     day: Optional[int]  # Which day has the issue (None for overall)
     message: str  # Description of issue
     impact: str  # How it affects the plan
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "severity": self.severity,
-            "category": self.category,
-            "day": self.day,
-            "message": self.message,
-            "impact": self.impact
-        }
 
 
 @dataclass
@@ -74,15 +65,6 @@ class ValidationRecommendation:
     suggestion: str  # What to do
     rationale: str  # Why this would help
     expected_improvement: Dict[str, float]  # How scores would improve
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "priority": self.priority,
-            "category": self.category,
-            "suggestion": self.suggestion,
-            "rationale": self.rationale,
-            "expected_improvement": self.expected_improvement
-        }
 
 
 @dataclass
@@ -96,18 +78,6 @@ class ValidationResult:
     status: str  # 'APPROVED' | 'NEEDS_IMPROVEMENT' | 'CRITICAL_ISSUES'
     summary: str
     iteration: int = 1
-    
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "is_valid": self.is_valid,
-            "overall_score": self.overall_score,
-            "category_scores": self.category_scores,
-            "issues": [i.to_dict() for i in self.issues],
-            "recommendations": [r.to_dict() for r in self.recommendations],
-            "status": self.status,
-            "summary": self.summary,
-            "iteration": self.iteration
-        }
 
 
 # ============================================================================
@@ -124,8 +94,11 @@ def validate_budget(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any
     - Per-person cost (group_size aware)
     """
     issues = []
-    score = 20.0  # Start with full points
-    
+    score = 20.0  
+    travel_budget = float(constraints.get("travel_budget", float('inf')))
+    total_cost = 0.0
+    day_costs = []
+
     if not scheduling or not constraints:
         return 0.0, [ValidationIssue(
             severity=SeverityLevel.CRITICAL.value,
@@ -134,19 +107,6 @@ def validate_budget(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any
             message="Missing scheduling or constraint data",
             impact="Cannot validate budget"
         )]
-    
-    try:
-        travel_budget = float(constraints.get("travel_budget", float('inf')))
-    except (ValueError, TypeError):
-        travel_budget = float('inf')
-        
-    try:
-        group_size = int(constraints.get("group_size", 1))
-    except (ValueError, TypeError):
-        group_size = 1
-    # Calculate total trip cost
-    total_cost = 0.0
-    day_costs = []
     
     for day_idx, day_schedule in enumerate(scheduling, 1):
         items = day_schedule.get("items", [])
@@ -187,7 +147,6 @@ def validate_budget(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any
     
     # Check daily budget distribution
     if day_costs:
-        max_daily_cost = max(day_costs)
         daily_budget = travel_budget / len(scheduling) if len(scheduling) > 0 else 0
         
         for day_idx, day_cost in enumerate(day_costs, 1):
@@ -200,6 +159,17 @@ def validate_budget(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any
                     impact="Uneven budget distribution across days"
                 ))
     
+    # Inherent realism deduction
+    if score == 20.0:
+        score -= 1.0
+        issues.append(ValidationIssue(
+            severity=SeverityLevel.INFO.value,
+            category="budget",
+            day=None,
+            message="Dự phòng sai số 5% cho các chi phí phát sinh ẩn (thuế, phí dịch vụ, tip)",
+            impact="Trừ điểm nhẹ để đảm bảo tính thực tế của ngân sách"
+        ))
+        
     logger.info(f"Budget validation: score={score}, usage={budget_usage_pct:.1f}%, total={total_cost:,.0f}VNĐ")
     return score, issues
 
@@ -240,7 +210,7 @@ def validate_time(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any])
         active_hours = sum(
             item.get("duration", 60) / 60  # Convert minutes to hours
             for item in items
-            if item.get("type") != "accommodation"
+            if item.get("type") not in ["accommodation", "rest", "transport"]
         )
         
         if active_hours > daily_active_hours:
@@ -254,6 +224,15 @@ def validate_time(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any])
                 day=day_idx,
                 message=f"Day {day_idx} has {active_hours:.1f} active hours (constraint: {daily_active_hours}h)",
                 impact="Risk of exhaustion and reduced trip enjoyment"
+            ))
+        elif active_hours < 2.0 and day_idx != 1 and day_idx != len(scheduling):
+            score = max(0.0, score - 2.0)
+            issues.append(ValidationIssue(
+                severity=SeverityLevel.WARNING.value,
+                category="time",
+                day=day_idx,
+                message=f"Day {day_idx} has too few activities ({active_hours:.1f}h)",
+                impact="Wasted travel day"
             ))
         
         # Check rest hours (assume 8 hours sleep needed)
@@ -269,18 +248,28 @@ def validate_time(scheduling: List[Dict[str, Any]], constraints: Dict[str, Any])
     
     if days_over > 0:
         logger.warning(f"Time validation: {days_over} days exceed active hour limit")
+        
+    # Inherent realism deduction
+    if score == 15.0:
+        score -= 1.0
+        issues.append(ValidationIssue(
+            severity=SeverityLevel.INFO.value,
+            category="time",
+            day=None,
+            message="Dự phòng thời gian trễ chuyến, tắc đường hoặc thay đổi lịch trình",
+            impact="Trừ điểm nhẹ để lịch trình có khoảng đệm thực tế"
+        ))
     
     return max(0.0, score), issues
 
 
-def validate_activities(scheduling: List[Dict[str, Any]], preferences: Dict[str, Any]) -> Tuple[float, List[ValidationIssue]]:
+def validate_activities(scheduling: List[Dict[str, Any]], original_activities: List[Dict[str, Any]], preferences: Dict[str, Any]) -> Tuple[float, List[ValidationIssue]]:
     """
     Validates activity suitability (20 points max)
     
     Checks:
     - Activity types match travel_style preferences
     - Activity pace aligns with travel_pace
-    - Activity atmosphere matches preferences
     - Activity distribution (variety vs repetition)
     """
     issues = []
@@ -296,13 +285,21 @@ def validate_activities(scheduling: List[Dict[str, Any]], preferences: Dict[str,
         )]
     
     travel_style = preferences.get("travel_style", [])
-    travel_pace = preferences.get("travel_pace", "moderate")
-    
+    if isinstance(travel_style, str):
+        travel_style = [travel_style]
+        
     activity_types = []
     perfect_matches = 0
     good_matches = 0
-    neutral_matches = 0
     poor_matches = 0
+    
+    # Create lookup dict for original activities
+    activity_lookup = {}
+    for a in original_activities:
+        if isinstance(a, dict) and "name" in a:
+            activity_lookup[a["name"].lower()] = a
+        elif hasattr(a, "name"):
+            activity_lookup[getattr(a, "name").lower()] = a
     
     for day_idx, day_schedule in enumerate(scheduling, 1):
         items = day_schedule.get("items", [])
@@ -311,35 +308,56 @@ def validate_activities(scheduling: List[Dict[str, Any]], preferences: Dict[str,
             if item.get("type") != "activity":
                 continue
             
-            activity_types.append(item.get("category", "unknown"))
+            activity_name = item.get("name", "")
+            orig_activity = activity_lookup.get(activity_name.lower(), {})
             
-            # Score activity match
-            category = item.get("category", "").lower()
-            suitability = item.get("suitability", [])
+            # If not a dict, convert it or get properties
+            if not isinstance(orig_activity, dict):
+                orig_activity = getattr(orig_activity, "__dict__", {})
+            
+            category = orig_activity.get("category", orig_activity.get("type", "unknown")).lower()
+            suitability = orig_activity.get("suitability_for", orig_activity.get("suitability", []))
+            
+            activity_types.append(category)
             
             # Check against travel_style
-            style_match = any(style.lower() in category or style.lower() in str(suitability).lower() 
-                            for style in (travel_style if isinstance(travel_style, list) else [travel_style]))
+            style_match = False
+            
+            desc = orig_activity.get("description", "").lower()
+            note = orig_activity.get("note", "").lower()
+            
+            for style in travel_style:
+                if (style.lower() in category or 
+                    style.lower() in str(suitability).lower() or 
+                    style.lower() in activity_name.lower() or
+                    style.lower() in desc or
+                    style.lower() in note):
+                    style_match = True
+                    break
             
             if style_match:
                 perfect_matches += 1
-                score += 5.0
             else:
                 # Check if activity is at least acceptable
                 if "general" in category or len(suitability) > 0:
                     good_matches += 1
-                    score += 3.0
                 else:
                     poor_matches += 1
     
-    # Normalize to 0-20
+    # Tính điểm: Khởi tạo 20 điểm tuyệt đối, trừ dần cho các lỗi
+    score = 20.0
     if activity_types:
-        num_activities = len(activity_types)
-        # Score based on perfect and good matches
-        activity_score = ((perfect_matches * 5.0 + good_matches * 3.0) / (num_activities * 5.0)) * 20.0
-        score = min(20.0, activity_score)
-    else:
-        score = 10.0  # Average if no activities
+        # Mỗi activity không phù hợp sẽ bị trừ 2 điểm, tối đa trừ 10 điểm
+        penalty = min(10.0, poor_matches * 2.0)
+        score -= penalty
+        if penalty > 0:
+            issues.append(ValidationIssue(
+                severity=SeverityLevel.WARNING.value,
+                category="activity_suitability",
+                day=None,
+                message=f"Có {poor_matches} hoạt động không thực sự khớp với phong cách du lịch.",
+                impact=f"Trừ {penalty} điểm vào độ phù hợp."
+            ))
     
     # Check for variety
     if activity_types:
@@ -444,6 +462,17 @@ def validate_accommodations(scheduling: List[Dict[str, Any]], preferences: Dict[
             impact="Good accommodation planning"
         ))
     
+    # Inherent realism deduction
+    if score == 15.0:
+        score -= 0.5
+        issues.append(ValidationIssue(
+            severity=SeverityLevel.INFO.value,
+            category="accommodation",
+            day=None,
+            message="Chất lượng phòng thực tế có thể thay đổi so với mô tả trên mạng",
+            impact="Trừ điểm nhẹ vì yếu tố trải nghiệm mang tính chủ quan"
+        ))
+        
     logger.info(f"Accommodation validation: score={score}, count={len(accommodations)}, avg_cost={sum(accommodation_costs)/len(accommodation_costs) if accommodation_costs else 0:,.0f}")
     return max(0.0, score), issues
 
@@ -508,6 +537,17 @@ def validate_transportation(scheduling: List[Dict[str, Any]]) -> Tuple[float, Li
             impact="Simple transport logistics"
         ))
     
+    # Inherent realism deduction
+    if score == 10.0:
+        score -= 0.5
+        issues.append(ValidationIssue(
+            severity=SeverityLevel.INFO.value,
+            category="transport",
+            day=None,
+            message="Rủi ro kẹt xe và thay đổi thời tiết ảnh hưởng đến di chuyển",
+            impact="Trừ điểm nhẹ để phản ánh rủi ro giao thông thực tế"
+        ))
+        
     logger.info(f"Transport validation: score={score}, transport_routes={len(transport_days)}")
     return max(0.0, score), issues
 
@@ -515,15 +555,9 @@ def validate_transportation(scheduling: List[Dict[str, Any]]) -> Tuple[float, Li
 def validate_balance(scheduling: List[Dict[str, Any]]) -> Tuple[float, List[ValidationIssue]]:
     """
     Validates schedule balance (10 points max)
-    
-    Checks:
-    - Activity distribution across days
-    - No "dead" days (only meals)
-    - No "exhausting" days (constant activity)
-    - Mix of rest and activity
     """
     issues = []
-    score = 10.0  # Start with full points
+    score = 4.0  # Start with low base points, earn more by having balanced days
     
     if not scheduling:
         return 0.0, [ValidationIssue(
@@ -536,51 +570,37 @@ def validate_balance(scheduling: List[Dict[str, Any]]) -> Tuple[float, List[Vali
     
     dead_days = 0
     exhausting_days = 0
+    well_balanced_days = 0
     
     for day_idx, day_schedule in enumerate(scheduling, 1):
         items = day_schedule.get("items", [])
         
-        # Count different types of items
         activities = [i for i in items if i.get("type") == "activity"]
         meals = [i for i in items if i.get("type") == "meal"]
-        accommodation = [i for i in items if i.get("type") == "accommodation"]
-        transport = [i for i in items if i.get("type") == "transport"]
         
         # Check for dead days
         if len(activities) == 0 and len(items) > 0:
             dead_days += 1
-            issues.append(ValidationIssue(
-                severity=SeverityLevel.INFO.value,
-                category="balance",
-                day=day_idx,
-                message=f"Day {day_idx} is arrival/departure day (no activities)",
-                impact="Expected for first/last days"
-            ))
-            score -= 1.0
+            score = max(0.0, score - 1.0)
         
         # Check for exhausting days
         if len(activities) >= 4:
             exhausting_days += 1
-            issues.append(ValidationIssue(
-                severity=SeverityLevel.WARNING.value,
-                category="balance",
-                day=day_idx,
-                message=f"Day {day_idx} has {len(activities)} activities (potentially exhausting)",
-                impact="Risk of traveler fatigue and reduced enjoyment"
-            ))
-            score -= 2.0
+            score = max(0.0, score - 1.5)
         
         # Positive feedback for balanced days
         if 1 <= len(activities) <= 3 and len(meals) >= 2:
-            issues.append(ValidationIssue(
-                severity=SeverityLevel.INFO.value,
-                category="balance",
-                day=day_idx,
-                message=f"Day {day_idx}: Good balance ({len(activities)} activities, {len(meals)} meals)",
-                impact="Well-planned day with appropriate pacing"
-            ))
+            well_balanced_days += 1
+            score += 2.0
+            
+    score = min(10.0, score)
     
-    logger.info(f"Balance validation: score={score}, dead_days={dead_days}, exhausting={exhausting_days}")
+    if dead_days > 0:
+        issues.append(ValidationIssue(severity=SeverityLevel.INFO.value, category="balance", day=None, message=f"Has {dead_days} days with no activities", impact="Uneven pacing"))
+    if exhausting_days > 0:
+        issues.append(ValidationIssue(severity=SeverityLevel.WARNING.value, category="balance", day=None, message=f"Has {exhausting_days} exhausting days", impact="Risk of fatigue"))
+        
+    logger.info(f"Balance validation: score={score}, well_balanced={well_balanced_days}")
     return max(0.0, score), issues
 
 
@@ -668,6 +688,17 @@ def validate_health_safety(scheduling: List[Dict[str, Any]], constraints: Dict[s
             impact="Good health & safety planning"
         ))
     
+    # Inherent realism deduction
+    if score == 10.0:
+        score -= 0.5
+        issues.append(ValidationIssue(
+            severity=SeverityLevel.INFO.value,
+            category="health",
+            day=None,
+            message="Thể lực người dùng có thể suy giảm bất ngờ vào các ngày cuối",
+            impact="Trừ điểm nhẹ để cảnh báo nguy cơ mệt mỏi cộng dồn"
+        ))
+        
     logger.info(f"Health & safety validation: score={score}, limitations={len(health_limitations)}")
     return max(0.0, score), issues
 
@@ -729,7 +760,7 @@ def determine_status(score: float, issues: List[ValidationIssue]) -> str:
     """Determine validation status based on score and critical issues"""
     critical_issues = [i for i in issues if i.severity == SeverityLevel.CRITICAL.value]
     
-    if critical_issues and score < 50:
+    if critical_issues:
         return "CRITICAL_ISSUES"
     elif score >= 70:
         return "APPROVED"
@@ -794,10 +825,13 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     logger.info(f"Starting validation (iteration {iteration}) for {len(scheduling)} days")
     
+    # Need to get original activities list for suitability checking
+    original_activities = state.get("activities", state.get("activity", []))
+    
     # Run all validation checks
     budget_score, budget_issues = validate_budget(scheduling, constraints)
     time_score, time_issues = validate_time(scheduling, constraints)
-    activity_score, activity_issues = validate_activities(scheduling, preferences)
+    activity_score, activity_issues = validate_activities(scheduling, original_activities, preferences)
     accommodation_score, accommodation_issues = validate_accommodations(scheduling, preferences)
     transport_score, transport_issues = validate_transportation(scheduling)
     balance_score, balance_issues = validate_balance(scheduling)
@@ -821,6 +855,11 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     # Calculate overall score
     overall_score = calculate_overall_score(category_scores)
+    
+    has_critical = any(i.severity == SeverityLevel.CRITICAL.value for i in all_issues)
+    if has_critical and overall_score >= 70:
+        overall_score = 69.0  # Force score below MIN_ACCEPTABLE_SCORE to trigger feedback loop
+
     status = determine_status(overall_score, all_issues)
     summary = generate_summary(overall_score, status, category_scores, all_issues)
     
@@ -832,8 +871,8 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         recommendations.append(ValidationRecommendation(
             priority="high",
             category="budget",
-            suggestion="Remove or replace expensive activities with budget alternatives",
-            rationale="Budget constraint exceeded. Prioritize lower-cost activities.",
+            suggestion="Loại bỏ hoặc thay thế các hoạt động đắt đỏ bằng các lựa chọn tiết kiệm hơn",
+            rationale="Vượt quá giới hạn ngân sách. Cần ưu tiên các hoạt động chi phí thấp.",
             expected_improvement={"budget": 20, "overall": 5}
         ))
     
@@ -842,8 +881,8 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         recommendations.append(ValidationRecommendation(
             priority="high",
             category="time",
-            suggestion="Reduce daily activities or redistribute across more days",
-            rationale="Daily active hours exceed recommended limit. Risk of exhaustion.",
+            suggestion="Giảm bớt hoạt động trong ngày hoặc phân bổ lại sang các ngày khác",
+            rationale="Thời gian hoạt động mỗi ngày vượt quá mức khuyến nghị. Có nguy cơ gây kiệt sức.",
             expected_improvement={"time": 25, "health": 10, "overall": 6}
         ))
     
@@ -852,8 +891,8 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         recommendations.append(ValidationRecommendation(
             priority="medium",
             category="activity_suitability",
-            suggestion="Swap low-suitability activities with better-matching alternatives",
-            rationale="Activities don't align well with travel preferences and style.",
+            suggestion="Thay thế các hoạt động ít phù hợp bằng các lựa chọn sát với sở thích hơn",
+            rationale="Các hoạt động hiện tại không phản ánh đúng phong cách và sở thích du lịch.",
             expected_improvement={"activity_suitability": 20, "overall": 4}
         ))
     
@@ -862,8 +901,8 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
         recommendations.append(ValidationRecommendation(
             priority="medium",
             category="balance",
-            suggestion="Redistribute activities to balance packed and light days",
-            rationale="Schedule is unbalanced with some days over-packed and others empty.",
+            suggestion="Phân bổ lại hoạt động để cân bằng giữa những ngày quá tải và những ngày trống",
+            rationale="Lịch trình đang mất cân bằng, một số ngày quá nhiều hoạt động trong khi ngày khác lại quá ít.",
             expected_improvement={"balance": 25, "health": 10, "overall": 4}
         ))
     
@@ -882,7 +921,7 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     )
     
     # Update state
-    state["validation"] = validation_result.to_dict()
+    state["validation"] = asdict(validation_result)
     state["validation_result"] = validation_result  # Keep object for feedback loop
     
     # Increment iteration for the next pass
@@ -890,7 +929,7 @@ def validation_node(state: Dict[str, Any]) -> Dict[str, Any]:
     
     # Pass recommendations as feedback if not approved
     if status != "APPROVED" and recommendations:
-        state["validation_feedback"] = [r.to_dict() for r in recommendations]
+        state["validation_feedback"] = [asdict(r) for r in recommendations]
     else:
         state["validation_feedback"] = []
     

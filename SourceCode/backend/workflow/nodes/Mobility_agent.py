@@ -16,7 +16,6 @@ Stage 2 — Soft Constraints (AI Refinement, ranking only):
 """
 
 from __future__ import annotations
-
 import json
 import os
 from typing import List, Optional
@@ -26,6 +25,7 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from pydantic import BaseModel, Field
 from workflow.db import get_mongo_db, get_neo4j_driver
 from workflow.graph.stage import State
+from workflow.models.llm import DEFAULT_MODEL
 
 load_dotenv()
 
@@ -78,12 +78,19 @@ TRANSPORT_RULES: list[dict] = [
         "suitability": ["Family", "Group", "Friends", "Couples"],
     },
     {
-        "max_km": float("inf"),
+        "max_km": 1500.0,
         "type": "train",
         "base_price": 200_000,
         "price_per_km": 800,
         "suitability": ["Solo", "Couples", "Family", "Friends", "Group"],
     },
+    {
+        "max_km": float("inf"),
+        "type": "plane",
+        "base_price": 1_000_000,
+        "price_per_km": 2_000,
+        "suitability": ["Solo", "Couples", "Family", "Friends", "Group"],
+    }
 ]
 
 # ==========================================
@@ -146,6 +153,7 @@ def build_note(candidate: dict, group_size: int, travel_preferences: dict) -> st
         "bus":      "Tiết kiệm chi phí, phù hợp nhóm đông.",
         "coach":    "Xe giường nằm/ngồi, phù hợp chặng dài.",
         "train":    "An toàn, đúng giờ — nên đặt vé trước.",
+        "plane":    "Nhanh chóng, tiện lợi — tối ưu cho chặng bay xa.",
     }
     if t in type_notes:
         parts.append(type_notes[t])
@@ -383,34 +391,37 @@ class RankedOrder(BaseModel):
 
 _refine_prompt = ChatPromptTemplate.from_messages([
     ("system", """
-Bạn là chuyên gia tư vấn trải nghiệm du lịch.
-Nhiệm vụ DUY NHẤT của bạn là XẾP HẠNG LẠI danh sách phương tiện di chuyển dưới đây
-dựa trên cảm xúc, phong cách và "vibe" mà người dùng mong muốn.
+    Bạn là chuyên gia tư vấn trải nghiệm du lịch.
+    Nhiệm vụ DUY NHẤT của bạn là XẾP HẠNG LẠI danh sách phương tiện di chuyển dưới đây
+    dựa trên cảm xúc, phong cách và "vibe" mà người dùng mong muốn.
 
-QUY TẮC BẮT BUỘC:
-- TUYỆT ĐỐI KHÔNG thay đổi giá, khoảng cách hay bất kỳ con số nào — các giá trị đó đã được xác minh.
-- TUYỆT ĐỐI KHÔNG loại bỏ hay thêm phương án nào — chỉ sắp xếp lại.
-- Chỉ trả về danh sách ID theo thứ tự ưu tiên mới.
+    QUY TẮC BẮT BUỘC:
+    - TUYỆT ĐỐI KHÔNG thay đổi giá, khoảng cách hay bất kỳ con số nào — các giá trị đó đã được xác minh.
+    - TUYỆT ĐỐI KHÔNG loại bỏ hay thêm phương án nào — chỉ sắp xếp lại.
+    - Chỉ trả về danh sách ID theo thứ tự ưu tiên mới.
 
-GỢI Ý XẾP HẠNG theo phong cách:
-- "Chill", "Thong thả", "Lãng mạn" → Ưu tiên: walking > bicycle > motorbike
-- "Khám phá", "Năng động"           → Ưu tiên: motorbike > bicycle > taxi
-- "Sang trọng", "Tiện nghi"         → Ưu tiên: taxi > coach > train
-- "Tiết kiệm", "Bụi"               → Ưu tiên: bus > bicycle > walking
-- Nhóm gia đình / trẻ em            → Ưu tiên: taxi > coach > bus
-"""),
-    ("human", """
-Sở thích và phong cách du lịch của người dùng:
-{preferences}
+    GỢI Ý XẾP HẠNG theo phong cách:
+    - "Chill", "Thong thả", "Lãng mạn" → Ưu tiên: walking > bicycle > motorbike
+    - "Khám phá", "Năng động"           → Ưu tiên: motorbike > bicycle > taxi
+    - "Sang trọng", "Tiện nghi"         → Ưu tiên: taxi > coach > train
+    - "Tiết kiệm", "Bụi"               → Ưu tiên: bus > bicycle > walking
+    - Nhóm gia đình / trẻ em            → Ưu tiên: taxi > coach > bus
 
-Danh sách phương án khả thi (đã qua bộ lọc ngân sách & sức khỏe):
-{candidates}
+    [RÀNG BUỘC PHẢN HỒI (VALIDATION FEEDBACK)]
+    Nếu có feedback điều chỉnh từ Validation Agent, bạn BẮT BUỘC phải điều chỉnh thứ tự ưu tiên:
+    {validation_feedback}
+    """),
+        ("human", """
+    Sở thích và phong cách du lịch của người dùng:
+    {preferences}
 
-Hãy trả về danh sách ID theo thứ tự ưu tiên mới.
-""")
-])
+    Danh sách phương án khả thi (đã qua bộ lọc ngân sách & sức khỏe):
+    {candidates}
 
-from workflow.models.llm import DEFAULT_MODEL
+    Hãy trả về danh sách ID theo thứ tự ưu tiên mới.
+    """)
+    ])
+
 
 _refine_llm = ChatGoogleGenerativeAI(
     model=DEFAULT_MODEL,
@@ -423,6 +434,7 @@ _refine_chain = _refine_prompt | _refine_llm.with_structured_output(RankedOrder)
 def refine_with_ai(
     candidates: list[dict],
     travel_preferences: dict,
+    validation_feedback: list = None,
 ) -> list[dict]:
     """
     Stage 2 — AI Refinement Layer (Soft Constraints).
@@ -463,6 +475,7 @@ def refine_with_ai(
 
     try:
         response: RankedOrder = _refine_chain.invoke({
+            "validation_feedback": json.dumps(validation_feedback, ensure_ascii=False) if validation_feedback else "Không có",
             "preferences": json.dumps(pref_summary, ensure_ascii=False),
             "candidates":  json.dumps(summary,      ensure_ascii=False),
         })
@@ -521,7 +534,8 @@ def mobility_node(state: State) -> State:
     )
 
     # ── Stage 2: Soft Constraints (AI Refinement) ─────────────────────────────
-    transportations = refine_with_ai(feasible, travel_preferences)
+    feedback = state.get("validation_feedback", [])
+    transportations = refine_with_ai(feasible, travel_preferences, feedback)
 
     # Update state with transportations
     state["transportations"] = transportations

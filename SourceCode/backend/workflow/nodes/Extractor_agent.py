@@ -64,13 +64,15 @@ llm = LLM(
 )
 
 def extractor_node(state: State) -> State:
+    trip_meta = state.get("trip_metadata", {})
+    
     user_des_input = state.get("user_des_input") or state.get("usr_des_input") or ""
     group_size = state.get("group_size")
     start_date = state.get("start_date") 
     end_date = state.get("end_date") 
     start_location = state.get("start_location")
     destination = state.get("destination")
-    personal_travel_style_des = state.get("personal_travel_style_des") 
+    personal_travel_style_des = state.get("personal_travel_style_des")
 
     combined_input = f"""
     - Yêu cầu chính: {user_des_input}
@@ -86,7 +88,9 @@ def extractor_node(state: State) -> State:
     response_str = llm.invoke(prompt_value)
     response = ExtractorOutput.model_validate_json(response_str)
     
-    trip_meta = response.trip_metadata.model_dump()
+    # Merge LLM output into existing trip_meta
+    trip_meta.update(response.trip_metadata.model_dump())
+    
     travel_prefs = response.travel_preferences.model_dump()
     constraints = response.constraints.model_dump()
 
@@ -95,6 +99,7 @@ def extractor_node(state: State) -> State:
     trip_meta["start_location"] = start_location
     trip_meta["destination"] = destination
     constraints["group_size"] = group_size
+    constraints["travel_budget"] = str(trip_meta["total_budget"])
 
     return {
         "trip_metadata": trip_meta,

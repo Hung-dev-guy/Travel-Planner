@@ -6,7 +6,6 @@ Endpoints:
   POST /chatbot/api/chat/                   – Send a message to the agent
   GET  /chatbot/api/trips/<user_id>/        – List all trips for a user
   GET  /chatbot/api/trip/<trip_id>/         – Get trip + day details
-  POST /chatbot/api/trip/<trip_id>/save/    – Save edited trip to MongoDB
   GET  /chatbot/api/health/                 – Health check (Redis + MongoDB)
   DELETE /chatbot/api/memory/<user_id>/     – Clear conversation memory
 """
@@ -24,14 +23,12 @@ from django.views.decorators.http import require_http_methods
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-from workflow.models.llm import DEFAULT_MODEL
+from .llm import CHATBOT_MODEL  
 from .agent import AgentState, create_agent_graph
 from .memory import MemoryManager
 from .db import (
     get_trips_for_user,
     get_full_trip_context,
-    save_full_trip,
-    update_trip,
 )
 from .prompts import GREETING_TEMPLATE
 
@@ -45,7 +42,7 @@ def _get_agent_graph():
     global _agent_graph
     if _agent_graph is None:
         llm = ChatGoogleGenerativeAI(
-            model=DEFAULT_MODEL,
+            model=CHATBOT_MODEL,
             google_api_key=os.environ.get("GOOGLE_API_KEY", ""),
             temperature=0.3,
         )
@@ -217,62 +214,6 @@ def chat(request):
         "query_type": final_state.get("query_type"),
         "timing": {"total_seconds": total},
     })
-
-
-# ── View: save edited trip ────────────────────────────────────────────────────
-
-@csrf_exempt
-@require_http_methods(["POST"])
-def save_trip(request, trip_id: str):
-    """
-    POST /chatbot/api/trip/<trip_id>/save/
-    Body (JSON):
-      {
-        "trip": { ...trip fields to update... },
-        "day_details": [ ...full day detail docs... ]   // optional
-      }
-
-    Saves the edited itinerary to MongoDB Trips + DayDetails.
-    """
-    try:
-        body = json.loads(request.body or "{}")
-    except json.JSONDecodeError:
-        return _error("Invalid JSON body", 400)
-
-    trip_updates = body.get("trip", {})
-    day_details = body.get("day_details", [])
-
-    if not trip_updates and not day_details:
-        return _error("No trip data provided to save", 400)
-
-    try:
-        if day_details:
-            # Full save – replace day details entirely
-            ok = save_full_trip(trip_id, trip_updates, day_details)
-        else:
-            # Partial update – only update trip-level fields
-            ok = update_trip(trip_id, trip_updates)
-
-        if ok:
-            return _json_response({
-                "success": True,
-                "trip_id": trip_id,
-                "message": "Kế hoạch du lịch đã được lưu thành công!",
-            })
-        else:
-            return _json_response({
-                "success": False,
-                "trip_id": trip_id,
-                "error": "Không thể lưu kế hoạch vào cơ sở dữ liệu. Vui lòng thử lại.",
-            }, 500)
-
-    except Exception as exc:
-        logger.error(f"save_trip error: {exc}", exc_info=True)
-        return _json_response({
-            "success": False,
-            "trip_id": trip_id,
-            "error": f"Lỗi lưu dữ liệu: {str(exc)}",
-        }, 500)
 
 
 # ── View: health check ────────────────────────────────────────────────────────

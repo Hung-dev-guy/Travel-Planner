@@ -24,9 +24,11 @@ const ProtectedRoute = ({ children }) => {
 };
 
 const AppRoutes = () => {
+  const isAuthenticated = !!localStorage.getItem('user');
+
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
+      <Route path="/" element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <Navigate to="/login" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
       

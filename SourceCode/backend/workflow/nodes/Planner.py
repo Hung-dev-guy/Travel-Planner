@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from workflow.graph.stage import State
 from workflow.db import get_neo4j_driver, get_mongo_db
 from workflow.models.llm import LLM
-from typing import List
+from typing import List, Optional
 from dotenv import load_dotenv
 import os
 import json
@@ -17,24 +17,27 @@ load_dotenv()
 class SelectedAccommodation(BaseModel):
     locationId: str = Field(description="ID của khách sạn được chọn từ Database Context")
     name: str = Field(description="Tên nơi ở")
-    price_per_night: int = Field(description="Giá một đêm (VNĐ)")
+    cost: int = Field(description="Giá một đêm cho một phòng (VNĐ)")
     ward_name: str = Field(description="Tên phường/xã nơi khách sạn tọa lạc")
     description: str = Field(description="Lý do chọn nơi ở này (VD: Gần biển, đúng budget, phù hợp gia đình), tối đa 15 chữ")
+    img_url: Optional[str] = Field(default=None, description="Trường image_url của khách sạn từ Database Context (nếu có)")
 
 class SelectedActivity(BaseModel):
     locationId: str = Field(description="ID của địa điểm được chọn từ Database Context")
     name: str = Field(description="Tên hoạt động / địa điểm")
     description: str = Field(description="Mô tả ngắn về hoạt động")
     estimated_duration_minutes: int = Field(description="Thời gian dự kiến (phút)")
-    estimated_cost: int = Field(description="Chi phí dự kiến (VNĐ)")
+    cost: int = Field(description="Chi phí dự kiến cho mỗi người (VNĐ)")
     suitability_for: List[str] = Field(description="Đối tượng phù hợp (VD: Family, Couples, Solo)")
     note: str = Field(description="Ghi chú thêm (VD: Nên đi buổi sáng, cần đặt trước), tối đa 15 chữ")
+    img_url: Optional[str] = Field(default=None, description="Trường image_url của địa điểm từ Database Context (nếu có)")
 
 class SelectedEatery(BaseModel):
     locationId: str = Field(description="ID của quán ăn từ Database Context")
     name: str = Field(description="Tên quán ăn")
-    price_per_person: int = Field(description="Giá trung bình mỗi người (VNĐ)")
+    cost: int = Field(description="Giá trung bình mỗi người (VNĐ)")
     description: str = Field(description="Lý do chọn quán ăn này (VD: Đặc sản địa phương, phù hợp trẻ em), tối đa 15 chữ")
+    img_url: Optional[str] = Field(default=None, description="Trường image_url của quán ăn từ Database Context (nếu có)")
 
 class PlannerOutput(BaseModel):
     accommodation: List[SelectedAccommodation] = Field(description="Danh sách nơi ở được chọn.")
@@ -58,9 +61,9 @@ planner_prompt = ChatPromptTemplate.from_messages([
     [BƯỚC 1 — PHỄU LỌC CỨNG (Loại bỏ không khả thi)]
     Duyệt qua từng địa điểm và loại bỏ nếu vi phạm BẤT KỲ điều kiện nào:
     1. NGÂN SÁCH: Chọn ra một tập hợp các địa điểm (Ít nhất 1 Nơi ở, nhiều Hoạt động, nhiều Quán ăn) sao cho TỔNG CHI PHÍ không vượt quá NGÂN SÁCH ({total_budget} VND). 
-       - Lưu ý 1: `estimatedPrice` của Khách sạn (Stay) là giá cho 1 phòng/đêm, bạn phải nhân lên số đêm.
+       - Lưu ý 1: `estimatedPrice` của Khách sạn (Stay) là giá cho 1 phòng/đêm. Bạn BẮT BUỘC gán giá trị này vào trường `cost` của SelectedAccommodation, TUYỆT ĐỐI KHÔNG để cost = 0 cho khách sạn.
        - Lưu ý 2: `estimatedPrice` của Hoạt động/Quán ăn là giá cho 1 NGƯỜI, bạn phải nhân với số người (group_size).
-       - TUYỆT ĐỐI KHÔNG BỎ TRỐNG NƠI Ở VÀ HOẠT ĐỘNG. Nếu ngân sách eo hẹp, hãy BẮT BUỘC chọn các địa điểm rẻ nhất hoặc các hoạt động tham quan miễn phí (giá 0đ). Việc không trả về nơi lưu trú là một lỗi nghiêm trọng.
+       - TUYỆT ĐỐI KHÔNG BỎ TRỐNG NƠI Ở VÀ HOẠT ĐỘNG. Việc không trả về nơi lưu trú là một lỗi nghiêm trọng.
     2. SỨC KHỎE & THỂ LỰC: estimatedDuration quá dài hoặc địa điểm đòi hỏi thể lực không phù hợp với age_range, health_limitations.
     3. THỜI GIAN: Tổng thời gian các hoạt động trong ngày không vượt quá daily_active_hours.
     4. VÙNG CẤM: Địa điểm có tên xuất hiện trong places_of_limitation → loại bỏ.
@@ -77,6 +80,10 @@ planner_prompt = ChatPromptTemplate.from_messages([
     - Chọn ít nhất 2 quán ăn đa dạng (sáng/trưa/tối).
     - Ghi rõ lý do chọn vào trường `note` của mỗi địa điểm.
     - CẢNH BÁO NGHIÊM TRỌNG: CHỈ chọn địa điểm có thật trong [DATABASE CONTEXT]. TUYỆT ĐỐI KHÔNG trả về các giá trị rác, dữ liệu mẫu như "string" hay tự bịa ra địa điểm. Nếu không có gì phù hợp, hãy trả về danh sách rỗng [].
+    
+    [RÀNG BUỘC PHẢN HỒI (VALIDATION FEEDBACK)]
+    Nếu có feedback từ Validation Agent, bạn BẮT BUỘC phải thay đổi sự lựa chọn để khắc phục:
+    {validation_feedback}
     
     Hãy tìm ra các địa điểm hoạt động, địa điểm ăn uống, chỗ ở, và các hoạt động khác phù hợp với yêu cầu chuyến đi của người dùng. Các thông tin về chuyến đi như sau:
     - Tổng Ngân Sách:      {total_budget} VNĐ
@@ -112,6 +119,7 @@ PROJECTION = {
     "suitabilityFor": 1,
     "openingHours": 1,
     "ward_name": 1,
+    "img_url": 1,
 }
 
 
@@ -139,7 +147,7 @@ def fetch_ward_names(destination: str) -> list[str]:
     return ward_names
 
 
-def fetch_locations_from_mongo(ward_names: list[str]) -> dict:
+def fetch_locations_from_mongo(ward_names: list[str], destinations: list[str] = None) -> dict:
     """
     Query MongoDB TravelDB.Locations filtered by ward_name list, split by category group.
     Returns dict with keys: hotels, activities, eateries.
@@ -151,6 +159,23 @@ def fetch_locations_from_mongo(ward_names: list[str]) -> dict:
     hotels = list(col.find(
         {**query_base, "category": {"$in": STAY_CATS}}, PROJECTION
     ).limit(20))
+    
+    # Fallback: Mở rộng tìm kiếm khách sạn theo province_name nếu ward không có
+    if not hotels and destinations:
+        for dest in destinations:
+            fallback_hotels = list(col.find(
+                {
+                    "$or": [
+                        {"province_name": {"$regex": dest, "$options": "i"}},
+                        {"ward_name": {"$regex": dest, "$options": "i"}}
+                    ],
+                    "category": {"$in": STAY_CATS}
+                }, PROJECTION
+            ).limit(10))
+            if fallback_hotels:
+                hotels = fallback_hotels
+                break
+    
     activities = list(col.find(
         {**query_base, "category": {"$in": ACTIVITY_CATS}}, PROJECTION
     ).limit(20))
@@ -181,7 +206,15 @@ def Planner_node(state: State) -> State:
             ward_names.extend(fetch_ward_names(dest))
             
     ward_names = list(set(ward_names))
-    db_context = fetch_locations_from_mongo(ward_names)
+    db_context = fetch_locations_from_mongo(ward_names, destinations)
+    
+    # Không cho phép trả về mock data, nếu không tìm thấy dữ liệu thật thì phải báo lỗi
+    if not db_context["hotels"]:
+        raise ValueError(f"Lỗi: Không tìm thấy bất kỳ Nơi lưu trú nào tại {destinations}. Vui lòng thêm dữ liệu thực tế vào hệ thống.")
+    if not db_context["activities"]:
+        raise ValueError(f"Lỗi: Không tìm thấy bất kỳ Hoạt động tham quan nào tại {destinations}. Vui lòng thêm dữ liệu thực tế vào hệ thống.")
+    if not db_context["eateries"]:
+        raise ValueError(f"Lỗi: Không tìm thấy bất kỳ Quán ăn/Nhà hàng nào tại {destinations}. Vui lòng thêm dữ liệu thực tế vào hệ thống.")
     
     total_budget = state.get("total_budget") or constraints.get("travel_budget", 0)
     if isinstance(total_budget, str):
@@ -189,7 +222,9 @@ def Planner_node(state: State) -> State:
         nums = re.findall(r"[\d\.]+", total_budget.replace(",", ""))
         total_budget = float(nums[0]) if nums else 0.0
     
+    feedback = state.get("validation_feedback", [])
     prompt_value = planner_prompt.format(
+        validation_feedback=json.dumps(feedback, ensure_ascii=False) if feedback else "Không có",
         db_hotels=json.dumps(db_context["hotels"], ensure_ascii=False),
         db_activities=json.dumps(db_context["activities"], ensure_ascii=False),
         db_eateries=json.dumps(db_context["eateries"], ensure_ascii=False),
@@ -203,7 +238,7 @@ def Planner_node(state: State) -> State:
     response = PlannerOutput.model_validate_json(response_str)
 
     return {
-        "accommodation": response.accommodation,
+        "accommodations": response.accommodation,
         "activities":    response.activities,
         "eateries":      response.eateries,
     }

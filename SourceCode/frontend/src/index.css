@@ -28,7 +28,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-main);
-  background-image: linear-gradient(rgba(15, 23, 42, 0.85), rgba(15, 23, 42, 0.95)), url('./assets/images/DaNang.png');
+  background-image: linear-gradient(var(--bg-overlay-start), var(--bg-overlay-end)), url('./assets/images/amalfi.jpg');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;

@@ -256,7 +256,8 @@ def get_trip(request, trip_id):
                 }),
                 "issues": [],
                 "recommendations": []
-            }
+            },
+            "status_message": "Kế hoạch đã được tạo thành công!"
         }
         return _json({"success": True, "result": result})
     except Exception as exc:

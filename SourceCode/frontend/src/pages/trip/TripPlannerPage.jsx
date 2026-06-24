@@ -4,9 +4,11 @@ import { FiHelpCircle, FiAlertCircle } from 'react-icons/fi';
 import TripForm from '../../components/trip/TripForm';
 import TravelPreferenceInput from '../../components/trip/TravelPreferenceInput';
 import tripService from '../../services/tripService';
+import { useTheme } from '../../context/ThemeContext';
 
 const TripPlannerPage = () => {
   const navigate = useNavigate();
+  const { theme } = useTheme();
 
   // ── Form state ─────────────────────────────────────────────────────────────
   const [formData, setFormData] = useState({
@@ -77,11 +79,11 @@ const TripPlannerPage = () => {
 
   return (
     <div className="trip-planner-page" style={{ maxWidth: '800px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '40px' }}>
-        <h1 style={{ fontSize: '2.5rem', marginBottom: '8px', color: 'var(--primary)' }}>
+      <header style={{ marginBottom: '40px', textAlign: 'center', padding: '30px', borderRadius: '16px', backdropFilter: 'blur(4px)' }}>
+        <h1 style={{ fontSize: '2.8rem', marginBottom: '12px', color: 'var(--primary)', textShadow: theme === 'dark' ? '0 2px 10px rgba(0, 0, 0, 0.8)' : '0 2px 10px rgba(183, 223, 177, 0.6)', fontWeight: 800 }}>
           Tạo Hành Trình Tiếp Theo Của Bạn
         </h1>
-        <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>
+        <p style={{ color: 'rgba(255, 255, 255, 0.95)', fontSize: '1.2rem', textShadow: theme === 'dark' ? '0 1px 6px rgba(0, 0, 0, 0.8)' : '0 1px 6px rgba(0, 0, 0, 0.6)', fontWeight: 500, margin: 0 }}>
           Hãy cho chúng tôi biết bạn muốn đi đâu và bạn thích gì, AI của chúng tôi sẽ lo phần còn lại.
         </p>
       </header>

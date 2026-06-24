@@ -30,6 +30,7 @@ const TripPlanResultPage = () => {
   const [fetchedResult, setFetchedResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [showToast, setShowToast] = useState(true);
 
   // Pull result from router state (set by TripPlannerPage after API call)
   const initialResult = location.state?.result;
@@ -57,6 +58,14 @@ const TripPlanResultPage = () => {
   }, [initialResult, tripIdToFetch]);
 
   const result = initialResult || fetchedResult;
+
+  useEffect(() => {
+    if (result?.status_message) {
+      setShowToast(true);
+      const timer = setTimeout(() => setShowToast(false), 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [result?.status_message]);
 
   const handleSavePlan = async () => {
     if (!result?.db_schema || isSaving || isSaved) return;
@@ -99,8 +108,13 @@ const TripPlanResultPage = () => {
     );
   }
 
-  const { trip_overview: overview, scheduling, validation, status_message } = result;
+  const { trip_overview: overview, scheduling: rawScheduling, validation, status_message } = result;
   const { overall_score = 0, status, category_scores = {}, issues = [], recommendations = [] } = validation || {};
+
+  // Lọc trùng lặp các ngày (đề phòng LLM ảo giác trả về 2 ngày giống hệt nhau)
+  const scheduling = (rawScheduling || []).filter((day, index, self) =>
+    index === self.findIndex((d) => d.day === day.day)
+  );
 
   return (
     <div className="content" style={{ paddingBottom: '60px' }}>
@@ -149,20 +163,19 @@ const TripPlanResultPage = () => {
           </div>
         </header>
 
-        {/* ── Status message ── */}
-        <div style={{
-          marginBottom: 24,
-          padding: '14px 18px',
-          borderRadius: 10,
-          background: status === 'APPROVED' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
-          border: `1px solid ${status === 'APPROVED' ? 'rgba(16,185,129,0.4)' : 'rgba(245,158,11,0.4)'}`,
-          color: 'var(--text-primary)',
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-        }}>
-          {statusIcon(status)} {status_message}
-        </div>
+        {/* ── Status message (Push Notification / Toast) ── */}
+        {showToast && status_message && (
+          <div style={{
+            position: 'fixed', top: 30, right: 30, zIndex: 9999,
+            padding: '14px 20px', borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+            background: status === 'APPROVED' ? '#10b981' : '#f59e0b',
+            color: '#fff', display: 'flex', alignItems: 'center', gap: 10,
+            animation: 'toastSlideIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+          }}>
+            {statusIcon(status)} <span style={{fontWeight: 600, fontSize: '0.95rem'}}>{status_message}</span>
+            <style>{`@keyframes toastSlideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`}</style>
+          </div>
+        )}
 
         {/* ── Main two-column grid ── */}
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 30, alignItems: 'start' }}>
@@ -289,7 +302,7 @@ const TripPlanResultPage = () => {
                 </div>
                 <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: 4 }}>trên 100</div>
                 <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: '0.85rem', fontWeight: 600 }}>
-                  {statusIcon(status)} {status === 'APPROVED' ? 'TỐT' : status === 'NEEDS_IMPROVEMENT' ? 'CẦN CẢI THIỆN' : 'KHÔNG ĐẠT'}
+                  {statusIcon(status)} {status === 'APPROVED' ? 'TỐT' : status === 'NEEDS_IMPROVEMENT' ? 'CẦN CẢI THIỆN' : 'CẦN TỐI ƯU'}
                 </div>
               </div>
               {/* Category bars */}
@@ -324,17 +337,7 @@ const TripPlanResultPage = () => {
               </div>
             )}
 
-            {/* Recommendations */}
-            {recommendations.length > 0 && (
-              <div className="card-premium">
-                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)' }}>💡 Gợi ý cải thiện</h3>
-                {recommendations.slice(0, 3).map((r, i) => (
-                  <div key={i} style={{ marginBottom: 10, fontSize: '0.85rem', color: 'var(--text-secondary)', paddingLeft: 8, borderLeft: '3px solid var(--primary)' }}>
-                    <strong style={{ color: 'var(--text-primary)' }}>[{r.priority}]</strong> {r.suggestion}
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Removed Recommendations block to hide internal AI feedback from users */}
           </div>
         </div>
       </div>

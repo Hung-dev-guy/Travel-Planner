@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { FiSend, FiTrash2, FiRefreshCw, FiMapPin, FiCalendar, FiDollarSign,
-         FiMessageSquare, FiChevronRight, FiLoader, FiZap } from 'react-icons/fi';
+         FiMessageSquare, FiChevronRight, FiLoader, FiZap, FiLink, FiGlobe, FiAlertCircle, FiCpu, FiPlus, FiCoffee, FiStar, FiHome, FiCamera, FiNavigation } from 'react-icons/fi';
 import chatbotService from '../../services/chatbotService';
 
 // ── Markdown-lite renderer ──────────────────────────────────────────────────
@@ -41,11 +41,12 @@ const TypingIndicator = () => (
 
 const BotAvatar = ({ small }) => (
   <div style={{
-    width: small ? 18 : 30, height: small ? 18 : 30, flexShrink: 0,
-    borderRadius: '50%', background: 'linear-gradient(135deg,#10b981,#06b6d4)',
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: small ? '0.6rem' : '0.85rem', color: '#fff', fontWeight: 700
-  }}>🤖</div>
+    width: small ? 22 : 36, height: small ? 22 : 36, flexShrink: 0,
+    borderRadius: '50%', background: '#fff', border: '1px solid var(--border-light)',
+    display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden'
+  }}>
+    <img src="/image.png" alt="Traplanner Bot" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+  </div>
 );
 
 // ── Single message bubble ─────────────────────────────────────────────────
@@ -86,10 +87,10 @@ const MessageBubble = ({ msg }) => {
           {/* Source link */}
           {msg.url && (
             <a href={msg.url} target="_blank" rel="noopener noreferrer"
-              style={{ display: 'block', marginTop: 8, fontSize: '0.78rem',
+              style={{ display: 'flex', alignItems: 'center', gap: '4px', marginTop: 8, fontSize: '0.78rem',
                        color: isBot ? 'var(--primary)' : 'rgba(255,255,255,0.8)',
                        textDecoration: 'underline' }}>
-              🔗 Xem thêm
+              <FiLink /> Xem thêm
             </a>
           )}
         </div>
@@ -104,33 +105,23 @@ const MessageBubble = ({ msg }) => {
 
 // ── Trip card in sidebar ──────────────────────────────────────────────────
 const TripCard = ({ trip, isSelected, onSelect }) => {
-  const fmt = (n) => Number(n || 0).toLocaleString('vi-VN');
   return (
     <div
       onClick={() => onSelect(trip)}
       style={{
-        padding: '12px 14px', borderRadius: 10, cursor: 'pointer',
-        background: isSelected ? 'var(--primary-light)' : 'transparent',
-        border: `1px solid ${isSelected ? 'var(--primary)' : 'var(--border-light)'}`,
-        transition: 'all 0.2s', marginBottom: 8
+        padding: '8px 12px', borderRadius: 8, cursor: 'pointer',
+        background: isSelected ? 'rgba(0,0,0,0.05)' : 'transparent',
+        transition: 'all 0.2s', marginBottom: 2
       }}
-      onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background = 'var(--bg-main)'; } }}
+      onMouseEnter={e => { if (!isSelected) { e.currentTarget.style.background = 'rgba(0,0,0,0.03)'; } }}
       onMouseLeave={e => { if (!isSelected) { e.currentTarget.style.background = 'transparent'; } }}
     >
-      <div style={{ fontWeight: 600, fontSize: '0.9rem', color: isSelected ? 'var(--primary)' : 'var(--text-primary)',
-                    marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <FiMapPin size={12} style={{ flexShrink: 0 }} /> {trip.destination || 'Chưa xác định'}
-      </div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <FiDollarSign size={10} /> {fmt(trip.totalBudget)} ₫
+      <div style={{ fontWeight: 500, fontSize: '0.9rem', color: isSelected ? 'var(--text-primary)' : 'var(--text-secondary)',
+                    display: 'flex', alignItems: 'center', gap: 8 }}>
+        <FiMessageSquare size={14} style={{ flexShrink: 0 }} /> 
+        <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {trip.destination || 'Chuyến đi mới'}
         </span>
-        <span style={{
-          padding: '1px 6px', borderRadius: 4, fontSize: '0.7rem',
-          background: trip.status === 'CONFIRMED' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-          color: trip.status === 'CONFIRMED' ? '#10b981' : '#f59e0b',
-          fontWeight: 600
-        }}>{trip.status}</span>
       </div>
     </div>
   );
@@ -138,10 +129,11 @@ const TripCard = ({ trip, isSelected, onSelect }) => {
 
 // ── Quick-action chips ───────────────────────────────────────────────────
 const QUICK_ACTIONS = [
-  'Tóm tắt lịch trình cho tôi',
-  'Phân tích chi phí chi tiết',
-  'Gợi ý địa điểm nổi bật',
-  'Tìm khách sạn thay thế',
+  { label: 'Phân tích chi phí', icon: <FiDollarSign size={14} /> },
+  { label: 'Tìm khách sạn khác', icon: <FiHome size={14} /> },
+  { label: 'Gợi ý nhà hàng', icon: <FiCoffee size={14} /> },
+  { label: 'Địa điểm vui chơi', icon: <FiCamera size={14} /> },
+  { label: 'Đổi phương tiện', icon: <FiNavigation size={14} /> },
 ];
 
 // ── Main ChatContainer ────────────────────────────────────────────────────
@@ -166,7 +158,10 @@ const ChatContainer = ({ userId, onUserMessage }) => {
     setLoadingTrips(true);
     chatbotService.listTrips(userId)
       .then(res => {
-        setTrips(res.data.trips || []);
+        const uniqueTrips = (res.data.trips || []).filter((trip, index, self) =>
+          index === self.findIndex((t) => t.tripId === trip.tripId)
+        );
+        setTrips(uniqueTrips);
         setTripsLoaded(true);
       })
       .catch(err => {
@@ -194,7 +189,10 @@ const ChatContainer = ({ userId, onUserMessage }) => {
         `Xin chào! Bạn đã chọn chuyến đi tới **${trip.destination}**. Tôi có thể giúp gì cho bạn?`;
       setMessages([{ id: 1, text: greeting, sender: 'bot', time: now() }]);
       if (res.data.day_details) {
-        setSelectedDayDetails(res.data.day_details);
+        const uniqueDays = res.data.day_details.filter((day, index, self) =>
+          index === self.findIndex((d) => d.dayNumber === day.dayNumber)
+        );
+        setSelectedDayDetails(uniqueDays);
       }
       if (onUserMessage) onUserMessage();
     } catch (err) {
@@ -236,7 +234,7 @@ const ChatContainer = ({ userId, onUserMessage }) => {
     } catch (err) {
       const errMsg = err.response?.data?.error || err.message || 'Lỗi kết nối tới server.';
       setError(errMsg);
-      addMessage('Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại! 🙏', 'bot');
+      addMessage('Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại!', 'bot');
     } finally {
       setLoading(false);
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -256,31 +254,40 @@ const ChatContainer = ({ userId, onUserMessage }) => {
       display: 'grid',
       gridTemplateColumns: '260px 1fr',
       height: '100%',
-      background: 'var(--bg-sidebar)',
+      background: 'rgba(255, 255, 255, 0.4)',
+      backdropFilter: 'blur(24px)',
+      WebkitBackdropFilter: 'blur(24px)',
       borderRadius: 'var(--card-radius)',
       boxShadow: 'var(--shadow-premium)',
-      border: '1px solid var(--border-light)',
+      border: '1px solid rgba(255,255,255,0.5)',
       overflow: 'hidden',
     }}>
       {/* ── Left Sidebar: trip list ── */}
       <div style={{
-        borderRight: '1px solid var(--border-light)',
+        borderRight: '1px solid rgba(0,0,0,0.06)',
         display: 'flex', flexDirection: 'column',
-        background: 'var(--bg-sidebar)', overflow: 'hidden'
+        background: 'rgba(255, 255, 255, 0.3)', overflow: 'hidden'
       }}>
-        <div style={{ padding: '20px 16px 12px', borderBottom: '1px solid var(--border-light)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-            <FiMessageSquare size={16} style={{ color: 'var(--primary)' }} />
-            <span style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)' }}>
-              Kế hoạch của bạn
-            </span>
+        <div style={{ padding: '16px' }}>
+          <button onClick={() => { setSelectedTrip(null); setMessages([]); }}
+             style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: 'none',
+                      background: 'transparent', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10,
+                      fontWeight: 600, fontSize: '0.95rem', color: 'var(--primary)',
+                      transition: 'background 0.2s' }}
+             onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.05)'}
+             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+          >
+            <FiPlus size={18} /> Chat mới
+          </button>
+        </div>
+        
+        <div style={{ padding: '0 16px', marginBottom: 8 }}>
+          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textTransform: 'uppercase' }}>
+            Gần đây
           </div>
-          <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            Chọn chuyến đi để bắt đầu tư vấn
-          </p>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px' }}>
           {selectedTrip ? (
             <div>
               <button 
@@ -374,54 +381,79 @@ const ChatContainer = ({ userId, onUserMessage }) => {
       </div>
 
       {/* ── Right: Chat area ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-main)', minWidth: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-overlay-start)', minWidth: 0, minHeight: 0 }}>
 
-        {/* Header */}
-        <div style={{
-          padding: '16px 24px', borderBottom: '1px solid var(--border-light)',
-          display: 'flex', alignItems: 'center', gap: 12,
-          background: 'var(--bg-sidebar)'
-        }}>
-          <BotAvatar />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--text-primary)' }}>
-              TrapBot · AI Travel Advisor
-            </div>
-            <div style={{ fontSize: '0.75rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#10b981' }} />
-              {selectedTrip
-                ? `Đang tư vấn: ${selectedTrip.destination}`
-                : 'Chọn một chuyến đi để bắt đầu'}
-            </div>
-          </div>
-          <FiZap size={16} style={{ color: 'var(--primary)', opacity: 0.7 }} />
-        </div>
-
-        {/* Messages */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+        {/* Messages & Empty State */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column' }}>
           {/* Empty state */}
           {messages.length === 0 && !loading && (
-            <div style={{ textAlign: 'center', paddingTop: '60px' }}>
-              <div style={{ fontSize: '3rem', marginBottom: 16 }}>🌏</div>
-              <h3 style={{ color: 'var(--text-primary)', marginBottom: 8 }}>
-                Chào mừng tới TrapBot
-              </h3>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', maxWidth: 320, margin: '0 auto 32px' }}>
-                Chọn một kế hoạch du lịch bên trái hoặc hỏi tôi bất kỳ điều gì về hành trình của bạn.
-              </p>
-              {/* Quick action chips */}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
-                {QUICK_ACTIONS.map(q => (
-                  <button key={q} onClick={() => handleSend(q)} style={{
-                    padding: '8px 16px', borderRadius: 20,
-                    border: '1px solid var(--primary)', background: 'var(--primary-light)',
-                    color: 'var(--primary)', fontSize: '0.82rem', cursor: 'pointer',
-                    transition: 'all 0.2s', fontWeight: 500
-                  }}
-                    onMouseEnter={e => { e.currentTarget.style.background = 'var(--primary)'; e.currentTarget.style.color = '#fff'; }}
-                    onMouseLeave={e => { e.currentTarget.style.background = 'var(--primary-light)'; e.currentTarget.style.color = 'var(--primary)'; }}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              <h2 style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--primary)', marginBottom: 30, fontFamily: 'serif' }}>
+                Chào buổi chiều, my name is TrapBot
+              </h2>
+              
+              {/* Central Input Box */}
+              <div style={{ 
+                width: '100%', maxWidth: '750px', background: 'var(--bg-glass)', borderRadius: 24,
+                border: '1px solid var(--border-light)', padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+                display: 'flex', flexDirection: 'column', gap: 10,
+                backdropFilter: 'blur(10px)'
+              }}
+                onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+                onBlurCapture={e => e.currentTarget.style.borderColor = '#e5e7eb'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <FiPlus size={20} style={{ color: 'var(--text-muted)', cursor: 'pointer' }} />
+                  <textarea
+                    ref={inputRef}
+                    rows={1}
+                    value={input}
+                    onChange={e => {
+                      setInput(e.target.value);
+                      e.target.style.height = 'auto';
+                      e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
+                    }}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                    placeholder={selectedTrip ? `Hỏi về chuyến đi ${selectedTrip.destination}...` : 'Hỏi TrapBot về kế hoạch...'}
+                    disabled={loading}
+                    style={{
+                      flex: 1, border: 'none', outline: 'none', resize: 'none',
+                      background: 'transparent', color: 'var(--text-primary)',
+                      fontSize: '1rem', lineHeight: 1.5, maxHeight: 140,
+                      fontFamily: 'inherit', padding: '4px 0'
+                    }}
+                  />
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={loading || !input.trim()}
+                    style={{
+                      width: 36, height: 36, borderRadius: '50%', border: 'none',
+                      background: loading || !input.trim() ? '#f3f4f6' : 'var(--primary)',
+                      color: loading || !input.trim() ? '#9ca3af' : '#fff',
+                      cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.2s', flexShrink: 0
+                    }}
                   >
-                    {q}
+                    {loading ? <FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSend size={16} />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick action chips */}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', marginTop: 24, maxWidth: '750px' }}>
+                {QUICK_ACTIONS.map((q, i) => (
+                  <button key={i} onClick={() => handleSend(q.label)} style={{
+                    padding: '8px 16px', borderRadius: 24, border: '1px solid var(--border-light)',
+                    background: 'var(--bg-glass)', color: 'var(--primary)', fontSize: '0.85rem', fontWeight: 500, cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', gap: 8, transition: 'all 0.2s',
+                    backdropFilter: 'blur(8px)'
+                  }}
+                    onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.9)'; e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255, 255, 255, 0.65)'; e.currentTarget.style.transform = 'translateY(0)'; }}
+                  >
+                    <span style={{ color: 'var(--text-muted)' }}>{q.icon}</span>
+                    {q.label}
                   </button>
                 ))}
               </div>
@@ -436,85 +468,66 @@ const ChatContainer = ({ userId, onUserMessage }) => {
         {/* Error */}
         {error && (
           <div style={{ margin: '0 24px 8px', padding: '10px 14px', background: 'rgba(239,68,68,0.1)',
-                        border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8,
+                        border: '1px solid rgba(239,68,68,0.3)', borderRadius: 8, display: 'flex', alignItems: 'center', gap: '6px',
                         fontSize: '0.82rem', color: '#ef4444' }}>
-            ⚠️ {error}
+            <FiAlertCircle size={16} /> {error}
           </div>
         )}
 
-        {/* Quick action chips (when chatting) */}
-        {messages.length > 0 && !loading && (
-          <div style={{ padding: '0 24px 8px', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            {QUICK_ACTIONS.slice(0, 2).map(q => (
-              <button key={q} onClick={() => handleSend(q)} style={{
-                padding: '5px 12px', borderRadius: 14,
-                border: '1px solid var(--border-light)',
-                background: 'var(--bg-sidebar)', color: 'var(--text-secondary)',
-                fontSize: '0.78rem', cursor: 'pointer', transition: 'all 0.2s'
-              }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = 'var(--primary)'; e.currentTarget.style.color = 'var(--primary)'; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-light)'; e.currentTarget.style.color = 'var(--text-secondary)'; }}
-              >
-                {q}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {/* Input */}
-        <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border-light)', background: 'var(--bg-sidebar)' }}>
-          <div style={{
-            display: 'flex', gap: 10, alignItems: 'flex-end',
-            background: 'var(--bg-main)', borderRadius: 12,
-            border: '1px solid var(--border-light)', padding: '6px 8px 6px 16px',
-            boxShadow: 'var(--shadow-sm)', transition: 'border-color 0.2s',
-          }}
-            onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--primary)'}
-            onBlurCapture={e => e.currentTarget.style.borderColor = 'var(--border-light)'}
-          >
-            <textarea
-              ref={inputRef}
-              rows={1}
-              value={input}
-              onChange={e => {
-                setInput(e.target.value);
-                e.target.style.height = 'auto';
-                e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
-              }}
-              onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-              placeholder={selectedTrip
-                ? `Hỏi về chuyến đi ${selectedTrip.destination}...`
-                : 'Hỏi TrapBot về kế hoạch du lịch...'}
-              disabled={loading}
-              style={{
-                flex: 1, border: 'none', outline: 'none', resize: 'none',
-                background: 'transparent', color: 'var(--text-primary)',
-                fontSize: '0.93rem', lineHeight: 1.5, maxHeight: 140,
-                fontFamily: 'inherit', padding: '8px 0',
-              }}
-            />
-            <button
-              onClick={() => handleSend()}
-              disabled={loading || !input.trim()}
-              style={{
-                width: 40, height: 40, borderRadius: 10, border: 'none',
-                background: loading || !input.trim() ? 'var(--border-light)' : 'var(--primary)',
-                color: loading || !input.trim() ? 'var(--text-muted)' : '#fff',
-                cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                flexShrink: 0, transition: 'all 0.2s',
-                transform: loading || !input.trim() ? 'none' : undefined,
-              }}
+        {/* Bottom Input (only when chatting) */}
+        {messages.length > 0 && (
+          <div style={{ padding: '0 24px 24px', background: 'transparent' }}>
+            <div style={{
+              maxWidth: '800px', margin: '0 auto',
+              background: 'var(--bg-glass)', borderRadius: 24,
+              border: '1px solid var(--border-light)', padding: '10px 14px',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+              display: 'flex', alignItems: 'flex-end', gap: 10,
+              backdropFilter: 'blur(10px)'
+            }}
+              onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--primary)'}
+              onBlurCapture={e => e.currentTarget.style.borderColor = '#e5e7eb'}
             >
-              {loading
-                ? <FiRefreshCw size={16} style={{ animation: 'spin 1s linear infinite' }} />
-                : <FiSend size={16} />}
-            </button>
+              <FiPlus size={20} style={{ color: 'var(--text-muted)', cursor: 'pointer', marginBottom: 8 }} />
+              <textarea
+                ref={inputRef}
+                rows={1}
+                value={input}
+                onChange={e => {
+                  setInput(e.target.value);
+                  e.target.style.height = 'auto';
+                  e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
+                }}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
+                placeholder={selectedTrip ? `Hỏi về chuyến đi ${selectedTrip.destination}...` : 'Hỏi TrapBot về kế hoạch...'}
+                disabled={loading}
+                style={{
+                  flex: 1, border: 'none', outline: 'none', resize: 'none',
+                  background: 'transparent', color: 'var(--text-primary)',
+                  fontSize: '0.95rem', lineHeight: 1.5, maxHeight: 140,
+                  fontFamily: 'inherit', padding: '8px 0',
+                }}
+              />
+              <button
+                onClick={() => handleSend()}
+                disabled={loading || !input.trim()}
+                style={{
+                  width: 34, height: 34, borderRadius: '50%', border: 'none',
+                  background: loading || !input.trim() ? '#f3f4f6' : 'var(--primary)',
+                  color: loading || !input.trim() ? '#9ca3af' : '#fff',
+                  cursor: loading || !input.trim() ? 'not-allowed' : 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0, transition: 'all 0.2s', marginBottom: 2
+                }}
+              >
+                {loading ? <FiRefreshCw size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <FiSend size={14} />}
+              </button>
+            </div>
+            <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
+              TrapBot có thể mắc lỗi. Vui lòng kiểm tra lại các thông tin quan trọng.
+            </div>
           </div>
-          <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', marginTop: 6, textAlign: 'center' }}>
-            Enter để gửi · Shift+Enter xuống dòng
-          </div>
-        </div>
+        )}
       </div>
 
       <style>{`

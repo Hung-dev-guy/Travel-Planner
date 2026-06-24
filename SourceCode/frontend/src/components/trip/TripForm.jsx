@@ -1,5 +1,5 @@
 import React from 'react';
-import { FiMapPin, FiCalendar, FiUsers, FiDollarSign } from 'react-icons/fi';
+import { FiMapPin, FiCalendar, FiUsers, FiDollarSign, FiTarget, FiEdit3, FiStar } from 'react-icons/fi';
 
 /**
  * TripForm — controlled form collecting core trip parameters.
@@ -134,7 +134,7 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
         {/* Row 1: Starting Location */}
         <div>
           <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: 500 }}>
-            📍 Điểm xuất phát
+            <FiMapPin style={{ verticalAlign: 'middle', marginRight: 4 }} /> Điểm xuất phát
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
             <select
@@ -169,7 +169,7 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
         {/* Row 1.5: Destination */}
         <div>
           <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: 500 }}>
-            🎯 Điểm đến (có thể thêm nhiều nơi)
+            <FiTarget style={{ verticalAlign: 'middle', marginRight: 4 }} /> Điểm đến (có thể thêm nhiều nơi)
           </label>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '10px' }}>
             <select
@@ -287,7 +287,7 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
         {/* Row 4: Description (optional) */}
         <div>
           <label style={{ display: 'block', marginBottom: '8px', fontSize: '0.85rem', fontWeight: 500 }}>
-            ✍️ Mô tả chuyến đi mong muốn <span style={{ color: 'var(--text-secondary)' }}>(không bắt buộc)</span>
+            <FiEdit3 style={{ verticalAlign: 'middle', marginRight: 4 }} /> Mô tả chuyến đi mong muốn <span style={{ color: 'var(--text-secondary)' }}>(không bắt buộc)</span>
           </label>
           <textarea
             className="input-field"
@@ -312,7 +312,7 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
             className="btn-premium btn-primary"
             style={{ width: '100%', fontSize: '1rem', padding: '14px', position: 'relative' }}
           >
-            ✨ Tạo kế hoạch
+            <FiStar style={{ verticalAlign: 'middle', marginRight: 6 }} /> Tạo kế hoạch
           </button>
         )}
       </form>

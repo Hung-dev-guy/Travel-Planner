@@ -13,11 +13,14 @@ Tools available:
   - summarize_conversation     : summarise chat history for memory
   - classify_query_type        : classify if retrieval is needed
   - direct_response            : generate a quick direct reply (no DB needed)
+  - update_trip_activity       : update an existing activity in the trip
+  - add_new_activity           : add a new activity to the trip
+  - remove_activity            : remove an activity from the trip
 """
 
 import os
 import json
-from workflow.models.llm import DEFAULT_MODEL
+from .llm import CHATBOT_MODEL
 import logging
 import re
 from typing import List, Dict, Any, Optional
@@ -57,7 +60,7 @@ _safety_settings = {
 }
 
 _gemini_model = genai.GenerativeModel(
-    model_name=DEFAULT_MODEL,
+    model_name=CHATBOT_MODEL,
     generation_config=_generation_config,
     safety_settings=_safety_settings,
 )
@@ -101,7 +104,7 @@ def get_trip_details(trip_id: str) -> Dict[str, Any]:
 # ── Tool 2: Alternative hotels ────────────────────────────────────────────────
 
 @tool
-def search_alternative_hotels(destination: str, max_price_per_night: float,
+def search_alternative_hotels(destination: str, max_price_per_night: float = 2000000.0,
                                limit: int = 5) -> List[Dict[str, Any]]:
     """
     Tìm kiếm các khách sạn thay thế tại điểm đến từ Neo4j và MongoDB.
@@ -116,21 +119,17 @@ def search_alternative_hotels(destination: str, max_price_per_night: float,
     """
     logger.info(f"[Tool] search_alternative_hotels: dest={destination}, max={max_price_per_night}")
 
-    # Try Neo4j first
-    results = neo4j_find_alternative_hotels(destination, max_price_per_night, limit)
-
-    # Fallback to MongoDB Locations
-    if not results:
-        mongo_results = get_locations_by_category("hotel", destination, limit)
-        results = [
-            {
-                "name": loc.get("name", ""),
-                "address": loc.get("address", ""),
-                "price": loc.get("price_range", "Liên hệ"),
-                "description": loc.get("description", ""),
-            }
-            for loc in mongo_results
-        ]
+    # Fetch directly from MongoDB Locations
+    mongo_results = get_locations_by_category("Stay", destination, limit)
+    results = [
+        {
+            "name": loc.get("name", ""),
+            "address": loc.get("address", ""),
+            "price": loc.get("price_range", "Liên hệ"),
+            "description": loc.get("description", ""),
+        }
+        for loc in mongo_results
+    ]
 
     if not results:
         return [{"message": f"Không tìm thấy khách sạn phù hợp tại {destination} trong ngân sách."}]
@@ -158,22 +157,17 @@ def search_alternative_restaurants(destination: str, cuisine_type: str = "",
     """
     logger.info(f"[Tool] search_alternative_restaurants: dest={destination}, cuisine={cuisine_type}")
 
-    results = neo4j_find_alternative_restaurants(
-        destination, cuisine_type, max_price_per_person, limit
-    )
-
-    if not results:
-        category_key = cuisine_type if cuisine_type else "restaurant"
-        mongo_results = get_locations_by_category(category_key, destination, limit)
-        results = [
-            {
-                "name": loc.get("name", ""),
-                "address": loc.get("address", ""),
-                "cuisine": cuisine_type or "Đa dạng",
-                "avg_price": loc.get("price_range", "Liên hệ"),
-            }
-            for loc in mongo_results
-        ]
+    category_key = cuisine_type if cuisine_type else "Food"
+    mongo_results = get_locations_by_category(category_key, destination, limit)
+    results = [
+        {
+            "name": loc.get("name", ""),
+            "address": loc.get("address", ""),
+            "cuisine": cuisine_type or "Đa dạng",
+            "avg_price": loc.get("price_range", "Liên hệ"),
+        }
+        for loc in mongo_results
+    ]
 
     if not results:
         return [{"message": f"Không tìm thấy nhà hàng phù hợp tại {destination}."}]
@@ -199,22 +193,19 @@ def search_alternative_attractions(destination: str, activity_type: str = "",
     """
     logger.info(f"[Tool] search_alternative_attractions: dest={destination}, type={activity_type}")
 
-    results = neo4j_find_attractions(destination, activity_type, limit)
-
-    if not results:
-        mongo_results = get_locations_by_category(
-            activity_type or "attraction", destination, limit
-        )
-        results = [
-            {
-                "name": loc.get("name", ""),
-                "address": loc.get("address", ""),
-                "type": activity_type or "Tham quan",
-                "entry_fee": loc.get("price_range", "Miễn phí"),
-                "description": loc.get("description", ""),
-            }
-            for loc in mongo_results
-        ]
+    mongo_results = get_locations_by_category(
+        activity_type or "Activity", destination, limit
+    )
+    results = [
+        {
+            "name": loc.get("name", ""),
+            "address": loc.get("address", ""),
+            "type": activity_type or "Tham quan",
+            "entry_fee": loc.get("price_range", "Miễn phí"),
+            "description": loc.get("description", ""),
+        }
+        for loc in mongo_results
+    ]
 
     if not results:
         return [{"message": f"Không tìm thấy địa điểm phù hợp tại {destination}."}]
@@ -526,6 +517,31 @@ def remove_activity(trip_id: str, day_number: int, activity_name: str) -> str:
         return f"Thành công! Đã xóa '{activity_name}' khỏi Ngày {day_number}."
     return f"Lỗi: Không tìm thấy '{activity_name}' trong Ngày {day_number} để xóa."
 
+@tool 
+def update_transport_options(trip_id: str, day_number: int, old_transport: str, new_transport: str, new_price: int) -> str:
+    """
+    Thay thế/cập nhật phương tiện di chuyển trong lịch trình (Sửa đổi trực tiếp vào Database).
+    
+    Args:
+        trip_id: ID chuyến đi
+        day_number: Ngày số mấy (1, 2, ...)
+        old_transport: Tên phương tiện cũ cần thay thế
+        new_transport: Tên phương tiện mới
+        new_price: Chi phí ước tính (VNĐ)
+    """
+    logger.info(f"[Tool] update_transport_options: {trip_id} day {day_number} - {old_transport} -> {new_transport}")
+    new_act = {
+        "name": new_transport,
+        "type": "Transport",
+        "price": new_price,
+        "startTime": "", 
+        "endTime": "",
+        "note": "Đã cập nhật phương tiện bởi TrapBot"
+    }
+    success = update_activity_in_day(trip_id, day_number, old_transport, new_act)
+    if success:
+        return f"Thành công! Đã thay đổi phương tiện từ '{old_transport}' thành '{new_transport}' trong Ngày {day_number}."
+    return f"Lỗi: Không tìm thấy phương tiện '{old_transport}' trong Ngày {day_number} hoặc không thể lưu."
 
 # ── Tool 9: Classify query ────────────────────────────────────────────────────
 

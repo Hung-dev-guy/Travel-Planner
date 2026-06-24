@@ -16,10 +16,6 @@ const chatbotService = {
   /** Get full details + greeting for a selected trip. */
   getTrip: (tripId) => api.get(`/chatbot/api/trip/${tripId}/`),
 
-  /** Save an edited trip back to MongoDB. */
-  saveTrip: (tripId, tripData, dayDetails = []) =>
-    api.post(`/chatbot/api/trip/${tripId}/save/`, { trip: tripData, day_details: dayDetails }),
-
   /** Clear in-memory conversation history. */
   clearMemory: (userId) =>
     api.delete(`/chatbot/api/memory/${userId}/`),
