@@ -66,8 +66,8 @@ const TravelPreferenceInput = ({ selected = [], onChange, pace, onPaceChange, co
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginTop: '24px' }}>
       {/* Travel style */}
       <div className="card-premium">
-        <label style={{ display: 'block', marginBottom: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-          <FiTarget style={{ verticalAlign: 'middle', marginRight: 4 }} /> Phong cách du lịch <span style={{ color: 'var(--text-secondary)', fontWeight: 400, fontSize: '0.85rem' }}>(chọn tất cả những gì bạn thích)</span>
+        <label style={{ display: 'block', marginBottom: '14px', fontWeight: 600, color: 'var(--primary)', fontSize: '1.1rem' }}>
+          <FiTarget style={{ verticalAlign: 'middle', marginRight: 4 }} /> Phong cách du lịch <span style={{ color: '#4b5563', fontWeight: 400, fontSize: '0.85rem' }}>(chọn tất cả những gì bạn thích)</span>
         </label>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
           {STYLE_OPTIONS.map(opt => (
@@ -85,7 +85,7 @@ const TravelPreferenceInput = ({ selected = [], onChange, pace, onPaceChange, co
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
         {/* Travel Pace */}
         <div className="card-premium">
-          <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, color: 'var(--primary)', fontSize: '1.1rem' }}>
             <FiClock style={{ verticalAlign: 'middle', marginRight: 4 }} /> Nhịp độ chuyến đi
           </label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
@@ -102,7 +102,7 @@ const TravelPreferenceInput = ({ selected = [], onChange, pace, onPaceChange, co
 
         {/* Companion Type */}
         <div className="card-premium">
-          <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, color: 'var(--text-primary)' }}>
+          <label style={{ display: 'block', marginBottom: '12px', fontWeight: 600, color: 'var(--primary)', fontSize: '1.1rem' }}>
             <FiUsers style={{ verticalAlign: 'middle', marginRight: 4 }} /> Đi cùng ai
           </label>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>

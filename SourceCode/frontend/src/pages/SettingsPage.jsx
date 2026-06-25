@@ -109,7 +109,7 @@ const SettingsPage = () => {
         <section className="card-premium">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '20px' }}>
                 <div>
-                    <h3 style={{ marginBottom: '8px' }}>Sở thích Du lịch (AI Memory)</h3>
+                    <h3 style={{ marginBottom: '8px' }}>Sở thích Du lịch</h3>
                     <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Sở thích này sẽ được AI sử dụng để lên lịch trình phù hợp với bạn.</p>
                 </div>
             </div>

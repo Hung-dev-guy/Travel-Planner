@@ -15,6 +15,8 @@ import logging
 import time
 import hashlib
 import os
+import uuid
+from langsmith import traceable
 
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
@@ -67,6 +69,7 @@ def _extract_final_response(final_state: dict) -> str:
     for msg in reversed(messages):
         if isinstance(msg, AIMessage) and not getattr(msg, "tool_calls", None):
             content = msg.content
+            extracted_text = ""
             if isinstance(content, list):
                 # Extract text blocks if it's a list
                 text_blocks = []
@@ -75,8 +78,14 @@ def _extract_final_response(final_state: dict) -> str:
                         text_blocks.append(block.get("text", ""))
                     elif isinstance(block, str):
                         text_blocks.append(block)
-                return "\n\n".join(text_blocks)
-            return str(content)
+                extracted_text = "\n\n".join(text_blocks).strip()
+            else:
+                extracted_text = str(content).strip()
+            
+            if extracted_text:
+                return extracted_text
+            else:
+                return "Tôi đã thực hiện xong các thao tác theo yêu cầu của bạn!"
     return "Xin lỗi, không thể tạo phản hồi lúc này."
 
 
@@ -137,6 +146,7 @@ def get_trip(request, trip_id: str):
 
 @csrf_exempt
 @require_http_methods(["POST"])
+@traceable(run_type="chain", name="Traplanner_Chatbot_API")
 def chat(request):
     """
     POST /chatbot/api/chat/
@@ -189,8 +199,22 @@ def chat(request):
         "confidence": None,
     }
 
+    # Configure LangSmith threading and metadata
+    thread_id = body.get("thread_id", str(uuid.uuid4()))
+    invoke_config = {
+        "recursion_limit": 30,
+        "configurable": {
+            "thread_id": thread_id
+        },
+        "tags": ["traplanner", "chatbot-api"],
+        "metadata": {
+            "user_id": user_id,
+            "trip_id": trip_id
+        }
+    }
+
     try:
-        final_state = graph.invoke(initial_state, config={"recursion_limit": 30})
+        final_state = graph.invoke(initial_state, config=invoke_config)
     except Exception as exc:
         logger.error(f"[{request_id}] graph.invoke error: {exc}", exc_info=True)
         return _json_response({

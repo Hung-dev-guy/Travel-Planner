@@ -106,7 +106,7 @@ llm = LLM(
 
 # Category groupings
 STAY_CATS     = ["Stay"]
-ACTIVITY_CATS = ["Sightseeing", "Entertainment", "Culture", "nature"]
+ACTIVITY_CATS = ["Sightseeing", "Entertainment", "Culture", "nature", "Activity"]
 FOOD_CATS     = ["Food"]
 
 PROJECTION = {

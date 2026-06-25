@@ -248,7 +248,7 @@ def search_locations(query: str, limit: int = 5) -> List[Dict[str, Any]]:
         cursor = db["Locations"].find(
             {"name": {"$regex": query, "$options": "i"}},
             {"_id": 1, "name": 1, "category": 1, "address": 1,
-             "description": 1, "price_range": 1, "image_url": 1}
+             "description": 1, "price_range": 1, "estimatedPrice": 1, "ward_name": 1, "image_url": 1}
         ).limit(limit)
         return [serialize(doc) for doc in cursor]
     except Exception as exc:
@@ -263,12 +263,18 @@ def get_locations_by_category(category: str, destination: str = "",
         db = get_travel_db()
         query: Dict[str, Any] = {"category": {"$regex": category, "$options": "i"}}
         if destination:
-            query["address"] = {"$regex": destination, "$options": "i"}
+            dest_regex = {"$regex": destination, "$options": "i"}
+            query["$or"] = [
+                {"address": dest_regex},
+                {"description": dest_regex},
+                {"ward_name": dest_regex},
+                {"province_name": dest_regex}
+            ]
         cursor = db["Locations"].find(
             query,
             {"_id": 1, "name": 1, "category": 1, "address": 1,
-             "description": 1, "price_range": 1, "image_url": 1}
-        ).limit(limit)
+             "description": 1, "price_range": 1, "estimatedPrice": 1, "ward_name": 1, "image_url": 1}
+        ).limit(limit * 4)
         return [serialize(doc) for doc in cursor]
     except Exception as exc:
         logger.error(f"get_locations_by_category error: {exc}")

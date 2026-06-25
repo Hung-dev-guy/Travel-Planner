@@ -3,9 +3,19 @@ import { FiMapPin, FiClock, FiStar, FiX, FiTag, FiMessageSquare, FiEdit2, FiTras
 import { useNavigate } from 'react-router-dom';
 import destinationService from '../../services/destinationService';
 
-const DestinationCard = ({ destination }) => {
+const DestinationCard = ({ destination, modalOnly, onClose }) => {
   const navigate = useNavigate();
-  const [showModal, setShowModal] = useState(false);
+  const [showModal, setShowModal] = useState(modalOnly || false);
+
+  useEffect(() => {
+    if (modalOnly) setShowModal(true);
+  }, [modalOnly, destination]);
+
+  const handleCloseModal = () => {
+    setShowModal(false);
+    if (onClose) onClose();
+  };
+
   const [reviews, setReviews] = useState([]);
   const [newReview, setNewReview] = useState({ rating: 5, comment: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -105,7 +115,7 @@ const DestinationCard = ({ destination }) => {
       latitude: destination.latitude || '',
       longitude: destination.longitude || '',
       description: destination.description || '',
-      image: destination.image || ''
+      img_url: destination.img_url || destination.image || ''
     });
     setShowEditModal(true);
   };
@@ -118,7 +128,7 @@ const DestinationCard = ({ destination }) => {
       if (res.data.success) {
         alert('Cập nhật thành công!');
         setShowEditModal(false);
-        window.location.reload();
+        window.dispatchEvent(new Event('locationUpdated'));
       } else {
         alert('Cập nhật thất bại: ' + res.data.error);
       }
@@ -141,7 +151,7 @@ const DestinationCard = ({ destination }) => {
       });
       if (res.data.success) {
         alert('Đã xóa thành công!');
-        window.location.reload();
+        window.dispatchEvent(new Event('locationUpdated'));
       } else {
         alert('Lỗi: ' + res.data.error);
       }
@@ -157,11 +167,12 @@ const DestinationCard = ({ destination }) => {
 
   return (
     <>
-      <div className="card-premium" style={{ overflow: 'hidden', padding: 0 }}>
-        <div style={{ height: '180px', background: 'var(--border-light)', position: 'relative', overflow: 'hidden' }}>
-            {destination.image ? (
+      {!modalOnly && (
+        <div className="card-premium" style={{ overflow: 'hidden', padding: 0 }}>
+          <div style={{ height: '180px', background: 'var(--border-light)', position: 'relative', overflow: 'hidden' }}>
+            {(destination.img_url || destination.image) ? (
                 <img 
-                  src={destination.image} 
+                  src={destination.img_url || destination.image} 
                   alt={destination.name} 
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
                 />
@@ -223,6 +234,7 @@ const DestinationCard = ({ destination }) => {
           </div>
         </div>
       </div>
+      )}
 
       {showModal && (
         <div style={{
@@ -232,7 +244,7 @@ const DestinationCard = ({ destination }) => {
           zIndex: 9999, padding: '20px', backdropFilter: 'blur(5px)'
         }}>
           <div style={{
-            background: 'var(--bg-card)',
+            background: '#ffffff', color: '#1f2937',
             borderRadius: '16px',
             width: '100%', maxWidth: showTripsModal ? '1000px' : '600px',
             maxHeight: '90vh',
@@ -245,7 +257,7 @@ const DestinationCard = ({ destination }) => {
             {/* Left Content (Destination Details) */}
             <div style={{ flex: '0 0 600px', maxWidth: '600px', overflowY: 'auto', position: 'relative' }}>
             <button 
-              onClick={() => setShowModal(false)}
+              onClick={handleCloseModal}
               style={{
                 position: 'absolute', top: '16px', right: '16px',
                 background: 'rgba(0,0,0,0.5)', border: 'none', color: 'white',
@@ -258,7 +270,7 @@ const DestinationCard = ({ destination }) => {
             </button>
             
             <div style={{ height: '250px', position: 'relative' }}>
-               <img src={destination.image} alt={destination.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+               <img src={destination.img_url || destination.image} alt={destination.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, background: 'linear-gradient(transparent, rgba(0,0,0,0.8))', padding: '30px 20px 20px' }}>
                   <h2 style={{ margin: 0, color: 'white', fontSize: '1.8rem' }}>{destination.name}</h2>
                   <div style={{ display: 'flex', gap: '12px', marginTop: '8px', color: '#eee', fontSize: '0.9rem' }}>
@@ -299,9 +311,9 @@ const DestinationCard = ({ destination }) => {
                 </h4>
                 
                 {/* Review Form */}
-                <form onSubmit={handleSubmitReview} style={{ marginBottom: '20px', background: 'var(--bg-main)', padding: '15px', borderRadius: '8px' }}>
+                <form onSubmit={handleSubmitReview} style={{ marginBottom: '20px', background: 'white', color: '#1f2937', padding: '15px', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }}>
                   <div style={{ marginBottom: '10px' }}>
-                    <label style={{ marginRight: '10px', fontSize: '0.9rem', fontWeight: 600 }}>Chấm điểm:</label>
+                    <label style={{ marginRight: '10px', fontSize: '0.9rem', fontWeight: 600, color: '#1f2937' }}>Chấm điểm:</label>
                     {[1, 2, 3, 4, 5].map(star => (
                       <FiStar 
                         key={star} 
@@ -318,7 +330,7 @@ const DestinationCard = ({ destination }) => {
                     value={newReview.comment}
                     onChange={(e) => setNewReview({ ...newReview, comment: e.target.value })}
                     required
-                    style={{ marginBottom: '10px' }}
+                    style={{ marginBottom: '10px', background: 'white', color: '#1f2937', border: '1px solid #e5e7eb' }}
                   ></textarea>
                   <button type="submit" className="btn-premium btn-primary" disabled={isSubmitting} style={{ padding: '8px 16px', fontSize: '0.9rem' }}>
                     {isSubmitting ? 'Đang gửi...' : 'Gửi đánh giá'}
@@ -487,7 +499,7 @@ const DestinationCard = ({ destination }) => {
 
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Link hình ảnh</label>
-                <input type="text" className="input-field" value={editData.image} onChange={e => setEditData({...editData, image: e.target.value})} placeholder="https://..." />
+                <input type="text" className="input-field" value={editData.img_url} onChange={e => setEditData({...editData, img_url: e.target.value})} placeholder="https://..." />
               </div>
               
               <div>

@@ -5,7 +5,7 @@ chatbot/prompts.py
 TRAVEL_ADVISOR_SYSTEM_PROMPT = """
 # 🌏 TRAPLANNER – AI TRAVEL ADVISOR SYSTEM PROMPT
 ## VAI TRÒ & NĂNG LỰC
-Bạn là **TrapBot**, trợ lý AI chuyên tư vấn du lịch thông minh của hệ thống Traplanner.
+Bạn là **Travel Bot**, trợ lý AI chuyên tư vấn du lịch thông minh của hệ thống Traplanner.
 Nhiệm vụ chính của bạn:
 - Giải đáp mọi thắc mắc về kế hoạch du lịch mà người dùng đã tạo.
 - Tư vấn, gợi ý các lựa chọn thay thế (khách sạn, nhà hàng, địa điểm, phương tiện…).
@@ -51,7 +51,7 @@ Nhiệm vụ chính của bạn:
 """
 
 
-GREETING_TEMPLATE = """Xin chào! 👋 Tôi là **TrapBot**, trợ lý du lịch AI của Traplanner.
+GREETING_TEMPLATE = """Xin chào! 👋 Tôi là **Travel Bot**, trợ lý du lịch AI của Traplanner.
 
 Bạn vừa chọn kế hoạch chuyến đi tới **{destination}** – {duration_days} ngày với ngân sách **{budget:,.0f} VNĐ**.
 

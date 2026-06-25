@@ -254,19 +254,17 @@ const ChatContainer = ({ userId, onUserMessage }) => {
       display: 'grid',
       gridTemplateColumns: '260px 1fr',
       height: '100%',
-      background: 'rgba(255, 255, 255, 0.4)',
-      backdropFilter: 'blur(24px)',
-      WebkitBackdropFilter: 'blur(24px)',
+      background: 'var(--bg-sidebar)',
       borderRadius: 'var(--card-radius)',
       boxShadow: 'var(--shadow-premium)',
-      border: '1px solid rgba(255,255,255,0.5)',
+      border: '1px solid var(--border-light)',
       overflow: 'hidden',
     }}>
       {/* ── Left Sidebar: trip list ── */}
       <div style={{
-        borderRight: '1px solid rgba(0,0,0,0.06)',
+        borderRight: '1px solid var(--border-light)',
         display: 'flex', flexDirection: 'column',
-        background: 'rgba(255, 255, 255, 0.3)', overflow: 'hidden'
+        background: 'var(--bg-main)', overflow: 'hidden'
       }}>
         <div style={{ padding: '16px' }}>
           <button onClick={() => { setSelectedTrip(null); setMessages([]); }}
@@ -381,7 +379,7 @@ const ChatContainer = ({ userId, onUserMessage }) => {
       </div>
 
       {/* ── Right: Chat area ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-overlay-start)', minWidth: 0, minHeight: 0 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', background: 'var(--bg-sidebar)', minWidth: 0, minHeight: 0 }}>
 
         {/* Messages & Empty State */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column' }}>
@@ -389,15 +387,14 @@ const ChatContainer = ({ userId, onUserMessage }) => {
           {messages.length === 0 && !loading && (
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
               <h2 style={{ fontSize: '2rem', fontWeight: 600, color: 'var(--primary)', marginBottom: 30, fontFamily: 'serif' }}>
-                Chào buổi chiều, my name is TrapBot
+                Chào buổi chiều, my name is Travel Bot
               </h2>
               
               {/* Central Input Box */}
               <div style={{ 
-                width: '100%', maxWidth: '750px', background: 'var(--bg-glass)', borderRadius: 24,
-                border: '1px solid var(--border-light)', padding: '12px 16px', boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-                display: 'flex', flexDirection: 'column', gap: 10,
-                backdropFilter: 'blur(10px)'
+                width: '100%', maxWidth: '750px', background: 'var(--bg-main)', borderRadius: 24,
+                border: '1px solid var(--border-light)', padding: '12px 16px', boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+                display: 'flex', flexDirection: 'column', gap: 10
               }}
                 onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--primary)'}
                 onBlurCapture={e => e.currentTarget.style.borderColor = '#e5e7eb'}
@@ -414,7 +411,7 @@ const ChatContainer = ({ userId, onUserMessage }) => {
                       e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
                     }}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                    placeholder={selectedTrip ? `Hỏi về chuyến đi ${selectedTrip.destination}...` : 'Hỏi TrapBot về kế hoạch...'}
+                    placeholder={selectedTrip ? `Hỏi về chuyến đi ${selectedTrip.destination}...` : 'Hỏi Travel Bot về kế hoạch...'}
                     disabled={loading}
                     style={{
                       flex: 1, border: 'none', outline: 'none', resize: 'none',
@@ -479,11 +476,10 @@ const ChatContainer = ({ userId, onUserMessage }) => {
           <div style={{ padding: '0 24px 24px', background: 'transparent' }}>
             <div style={{
               maxWidth: '800px', margin: '0 auto',
-              background: 'var(--bg-glass)', borderRadius: 24,
+              background: 'var(--bg-main)', borderRadius: 24,
               border: '1px solid var(--border-light)', padding: '10px 14px',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-              display: 'flex', alignItems: 'flex-end', gap: 10,
-              backdropFilter: 'blur(10px)'
+              boxShadow: '0 4px 12px rgba(0,0,0,0.05)',
+              display: 'flex', alignItems: 'flex-end', gap: 10
             }}
               onFocusCapture={e => e.currentTarget.style.borderColor = 'var(--primary)'}
               onBlurCapture={e => e.currentTarget.style.borderColor = '#e5e7eb'}
@@ -499,7 +495,7 @@ const ChatContainer = ({ userId, onUserMessage }) => {
                   e.target.style.height = Math.min(e.target.scrollHeight, 140) + 'px';
                 }}
                 onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); } }}
-                placeholder={selectedTrip ? `Hỏi về chuyến đi ${selectedTrip.destination}...` : 'Hỏi TrapBot về kế hoạch...'}
+                placeholder={selectedTrip ? `Hỏi về chuyến đi ${selectedTrip.destination}...` : 'Hỏi Travel Bot về kế hoạch...'}
                 disabled={loading}
                 style={{
                   flex: 1, border: 'none', outline: 'none', resize: 'none',
@@ -524,7 +520,7 @@ const ChatContainer = ({ userId, onUserMessage }) => {
               </button>
             </div>
             <div style={{ fontSize: '0.71rem', color: 'var(--text-muted)', marginTop: 8, textAlign: 'center' }}>
-              TrapBot có thể mắc lỗi. Vui lòng kiểm tra lại các thông tin quan trọng.
+              Travel Bot có thể mắc lỗi. Vui lòng kiểm tra lại các thông tin quan trọng.
             </div>
           </div>
         )}

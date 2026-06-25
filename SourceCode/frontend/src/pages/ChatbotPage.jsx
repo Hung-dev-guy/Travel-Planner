@@ -33,8 +33,8 @@ const ChatbotPage = () => {
         }}>
           <FiMessageSquare /> Trợ lý AI Traplanner
         </h1>
-        <p style={{ margin: '4px 0 0', color: '#ffffff', fontSize: '0.9rem' }}>
-          Chọn một kế hoạch du lịch và bắt đầu trò chuyện với TrapBot.
+        <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '0.9rem', fontWeight: 500 }}>
+          Chọn một kế hoạch du lịch và bắt đầu trò chuyện với Travel Bot.
         </p>
       </div>
 

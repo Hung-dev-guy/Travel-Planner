@@ -1,5 +1,6 @@
 import React from 'react';
 import { FiMapPin, FiCalendar, FiUsers, FiDollarSign, FiTarget, FiEdit3, FiStar } from 'react-icons/fi';
+import destinationService from '../../services/destinationService';
 
 /**
  * TripForm — controlled form collecting core trip parameters.
@@ -82,10 +83,9 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
 
   // Fetch all provinces on mount
   React.useEffect(() => {
-    fetch('http://127.0.0.1:8000/destinations/api/provinces/')
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setProvinces(data.provinces);
+    destinationService.getProvinces()
+      .then(res => {
+        if (res.data && res.data.success) setProvinces(res.data.provinces);
       })
       .catch(console.error);
   }, []);
@@ -96,10 +96,9 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
       setStartWards([]);
       return;
     }
-    fetch(`http://127.0.0.1:8000/destinations/api/wards/?province=${encodeURIComponent(startProvince)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setStartWards(data.wards);
+    destinationService.getWards(startProvince)
+      .then(res => {
+        if (res.data && res.data.success) setStartWards(res.data.wards);
       })
       .catch(console.error);
   }, [startProvince]);
@@ -110,10 +109,9 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
       setDestWards([]);
       return;
     }
-    fetch(`http://127.0.0.1:8000/destinations/api/wards/?province=${encodeURIComponent(destProvince)}`)
-      .then(res => res.json())
-      .then(data => {
-        if (data.success) setDestWards(data.wards);
+    destinationService.getWards(destProvince)
+      .then(res => {
+        if (res.data && res.data.success) setDestWards(res.data.wards);
       })
       .catch(console.error);
   }, [destProvince]);
@@ -125,8 +123,8 @@ const TripForm = ({ formData = {}, onChange, onSubmit, loading }) => {
 
   return (
     <div className="card-premium">
-      <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-primary)' }}>
-        <FiMapPin className="text-secondary" /> Lên kế hoạch chuyến đi
+      <h3 style={{ marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)' }}>
+        <FiMapPin style={{ color: 'var(--primary)' }} /> Lên kế hoạch chuyến đi
       </h3>
 
       <form onSubmit={onSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

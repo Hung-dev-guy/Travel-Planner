@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { FiShare2, FiArrowLeft, FiCheckCircle, FiAlertCircle, FiXCircle, FiSave } from 'react-icons/fi';
+import { FiShare2, FiArrowLeft, FiCheckCircle, FiAlertCircle, FiXCircle, FiSave, FiTarget, FiCoffee, FiHome, FiNavigation, FiMapPin, FiDollarSign, FiActivity, FiBarChart2, FiStar, FiCircle, FiMessageSquare, FiTrash2 } from 'react-icons/fi';
 import tripService from '../../services/tripService';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -8,8 +8,13 @@ import tripService from '../../services/tripService';
 const fmt = (n) => Number(n || 0).toLocaleString('vi-VN');
 
 const itemIcon = (type) => {
-  const map = { activity: '🎯', meal: '🍽️', accommodation: '🏨', transportation: '🚌', transport: '🚌' };
-  return map[type] || '•';
+  const map = { 
+    activity: <FiTarget />, sightseeing: <FiTarget />, 
+    meal: <FiCoffee />, eat: <FiCoffee />, food: <FiCoffee />, 
+    accommodation: <FiHome />, stay: <FiHome />, 
+    transportation: <FiNavigation />, transport: <FiNavigation /> 
+  };
+  return map[type?.toLowerCase()] || <FiCircle size={10} />;
 };
 
 const statusIcon = (status) => {
@@ -86,6 +91,26 @@ const TripPlanResultPage = () => {
     }
   };
 
+  const handleDeletePlan = async () => {
+    const tripId = tripIdToFetch || result?.db_schema?.trip?.tripId;
+    if (!tripId) return;
+    
+    if (window.confirm('Bạn có chắc chắn muốn xóa chuyến đi này không? Dữ liệu sẽ không thể khôi phục.')) {
+      try {
+        const response = await tripService.deleteTrip(tripId);
+        if (response.data?.success) {
+          alert('Đã xóa chuyến đi thành công!');
+          navigate(-1);
+        } else {
+          alert('Xóa thất bại: ' + response.data?.error);
+        }
+      } catch (err) {
+        console.error('Lỗi khi xóa:', err);
+        alert('Lỗi khi xóa chuyến đi. Vui lòng thử lại!');
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '60vh' }}>
@@ -124,20 +149,32 @@ const TripPlanResultPage = () => {
         <header style={{ marginBottom: '32px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
           <div>
             <button
-              onClick={() => navigate('/dashboard')}
+              onClick={() => navigate(-1)}
               style={{ marginBottom: 12, background: 'transparent', border: '1px solid var(--border-light)', color: 'var(--text-secondary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 8, fontSize: '0.85rem' }}
             >
-              <FiArrowLeft /> Quay lại Dashboard
+              <FiArrowLeft /> Quay lại
             </button>
             <h1 style={{ fontSize: '2rem', marginBottom: 6, color: 'var(--primary)' }}>
               Hành trình {overview?.total_days} ngày khám phá {overview?.destination}
             </h1>
-            <p style={{ color: 'var(--text-secondary)' }}>
-              {overview?.start_date} → {overview?.end_date} · {overview?.group_size} người
+            <p style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
+              Dành cho {overview?.group_size || formData?.groupSize || 1} người
+              {((overview?.start_date || formData?.startDate || scheduling?.[0]?.date) && (overview?.end_date || formData?.endDate || scheduling?.[scheduling.length - 1]?.date)) 
+                ? ` từ ngày ${(overview?.start_date || formData?.startDate || scheduling?.[0]?.date).split('T')[0]} đến ${(overview?.end_date || formData?.endDate || scheduling?.[scheduling.length - 1]?.date).split('T')[0]}` 
+                : ''}
             </p>
           </div>
           
-          <div style={{ display: 'flex', gap: 12 }}>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            {isSaved && (tripIdToFetch || result?.db_schema?.trip?.tripId) && (
+              <button
+                className="btn-premium btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'var(--primary-color)', color: '#fff', borderColor: 'var(--primary)' }}
+                onClick={() => navigate('/chat', { state: { tripId: tripIdToFetch || result.db_schema.trip.tripId } })}
+              >
+                Hỏi Travel Bot <FiMessageSquare />
+              </button>
+            )}
             {result?.db_schema && (
               <button
                 className="btn-premium btn-secondary"
@@ -160,6 +197,15 @@ const TripPlanResultPage = () => {
             >
               Chia sẻ <FiShare2 />
             </button>
+            {isSaved && (tripIdToFetch || result?.db_schema?.trip?.tripId) && (
+              <button
+                className="btn-premium btn-secondary"
+                style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#ef4444', borderColor: '#ef4444', background: 'transparent' }}
+                onClick={handleDeletePlan}
+              >
+                Xóa <FiTrash2 />
+              </button>
+            )}
           </div>
         </header>
 
@@ -228,7 +274,7 @@ const TripPlanResultPage = () => {
                             </span>
                           </div>
                           {item.location && (
-                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>📍 {item.location}</span>
+                            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}><FiMapPin /> {item.location}</span>
                           )}
                         </div>
                         <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)', flexShrink: 0 }}>
@@ -240,9 +286,9 @@ const TripPlanResultPage = () => {
 
                   {/* Day summary row */}
                   <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                    <span>💰 {fmt(day.day_summary?.total_cost)} ₫</span>
-                    <span>🎯 {day.day_summary?.activities_count} hoạt động</span>
-                    <span>🍽️ {day.day_summary?.meals_count} bữa ăn</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FiDollarSign /> {fmt(day.day_summary?.total_cost || day.items?.reduce((sum, i) => sum + (Number(i.cost) || 0), 0))} ₫</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FiActivity /> {day.items?.filter(i => ['activity', 'sightseeing'].includes(i.type?.toLowerCase())).length || 0} hoạt động</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><FiCoffee /> {day.items?.filter(i => ['meal', 'eat', 'food'].includes(i.type?.toLowerCase())).length || 0} bữa ăn</span>
                     <span style={{ color: 'var(--primary)', fontWeight: 600 }}>Xem chi tiết →</span>
                   </div>
                 </div>
@@ -255,7 +301,7 @@ const TripPlanResultPage = () => {
 
             {/* Budget card */}
             <div className="card-premium">
-              <h3 style={{ marginBottom: 16, color: 'var(--text-primary)' }}>💰 Tóm tắt Ngân sách</h3>
+              <h3 style={{ marginBottom: 16, color: 'var( --primary-color)', display: 'flex', alignItems: 'center', gap: 8 }}><FiDollarSign /> Tóm tắt Ngân sách</h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
                   <span style={{ color: 'var(--text-secondary)' }}>Tổng Ngân sách</span>
@@ -294,7 +340,7 @@ const TripPlanResultPage = () => {
 
             {/* Validation score card */}
             <div className="card-premium">
-              <h3 style={{ marginBottom: 16, color: 'var(--text-primary)' }}>📊 Điểm Kế Hoạch</h3>
+              <h3 style={{ marginBottom: 16, color: 'var( --primary-color)', display: 'flex', alignItems: 'center', gap: 8 }}><FiBarChart2 /> Điểm Kế Hoạch</h3>
               {/* Big score */}
               <div style={{ textAlign: 'center', marginBottom: 16 }}>
                 <div style={{ fontSize: '3rem', fontWeight: 800, color: scoreColor(overall_score), lineHeight: 1 }}>
@@ -310,10 +356,19 @@ const TripPlanResultPage = () => {
                 {Object.entries(category_scores).map(([cat, raw]) => {
                   const maxPts = { budget: 20, time: 15, activity_suitability: 20, accommodation: 15, transport: 10, balance: 10, health: 10 }[cat] || 10;
                   const pct = Math.round((raw / maxPts) * 100);
+                  const catLabels = {
+                    budget: 'Ngân sách',
+                    time: 'Thời gian',
+                    activity_suitability: 'Độ phù hợp hoạt động',
+                    accommodation: 'Chỗ ở',
+                    transport: 'Di chuyển',
+                    balance: 'Độ cân bằng',
+                    health: 'Sức khỏe'
+                  };
                   return (
                     <div key={cat}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.78rem', marginBottom: 3 }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>{cat.replace('_', ' ')}</span>
+                        <span style={{ color: 'var(--text-secondary)' }}>{catLabels[cat] || cat.replace('_', ' ')}</span>
                         <span style={{ fontWeight: 600 }}>{pct}%</span>
                       </div>
                       <div style={{ height: 5, background: 'var(--border-light)', borderRadius: 3, overflow: 'hidden' }}>
@@ -328,7 +383,7 @@ const TripPlanResultPage = () => {
             {/* Highlights */}
             {overview?.highlights?.length > 0 && (
               <div className="card-premium" style={{ background: 'rgba(16,185,129,0.08)', borderColor: 'var(--primary)' }}>
-                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)' }}>🌟 Điểm nổi bật</h3>
+                <h3 style={{ marginBottom: 12, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}><FiStar /> Điểm nổi bật</h3>
                 {overview.highlights.map((h, i) => (
                   <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 8, fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
                     <span>•</span><span>{h}</span>

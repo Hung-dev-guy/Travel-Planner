@@ -9,7 +9,6 @@
 body {
   margin: 0;
   font-family: 'Inter', sans-serif;
-  background-color: var(--bg-main);
   color: var(--text-primary);
   transition: background-color var(--transition-normal), color var(--transition-normal);
 }

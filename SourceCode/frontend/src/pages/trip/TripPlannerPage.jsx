@@ -83,7 +83,7 @@ const TripPlannerPage = () => {
         <h1 style={{ fontSize: '2.8rem', marginBottom: '12px', color: 'var(--primary)', textShadow: theme === 'dark' ? '0 2px 10px rgba(0, 0, 0, 0.8)' : '0 2px 10px rgba(183, 223, 177, 0.6)', fontWeight: 800 }}>
           Tạo Hành Trình Tiếp Theo Của Bạn
         </h1>
-        <p style={{ color: 'rgba(255, 255, 255, 0.95)', fontSize: '1.2rem', textShadow: theme === 'dark' ? '0 1px 6px rgba(0, 0, 0, 0.8)' : '0 1px 6px rgba(0, 0, 0, 0.6)', fontWeight: 500, margin: 0 }}>
+        <p style={{ color: 'var(--text-secondary)', fontSize: '1.2rem', fontWeight: 500, margin: 0 }}>
           Hãy cho chúng tôi biết bạn muốn đi đâu và bạn thích gì, AI của chúng tôi sẽ lo phần còn lại.
         </p>
       </header>
@@ -135,7 +135,7 @@ const TripPlannerPage = () => {
       }}>
         <div style={{ fontSize: '2rem' }}><FiHelpCircle /></div>
         <div>
-          <h4 style={{ margin: 0 }}>Mẹo nhỏ:</h4>
+          <h4 style={{ margin: 0, color: 'white' }}>Mẹo nhỏ:</h4>
           <p style={{ margin: '4px 0 0 0', opacity: 0.9 }}>
             AI Planner hoạt động tốt nhất cho các điểm đến tại Việt Nam — hãy thử Quảng Ninh, Đà Nẵng, hoặc Hội An!
           </p>

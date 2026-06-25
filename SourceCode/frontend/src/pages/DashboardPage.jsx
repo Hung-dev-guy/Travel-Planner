@@ -51,32 +51,34 @@ const StatItem = ({ icon, value, label, sub, accent = 'var(--primary)' }) => (
 // ── Recent Trip Row ────────────────────────────────────────────────────────
 const TripRow = ({ trip, onChat, onView, onDelete }) => (
   <div style={{
-    display: 'flex', alignItems: 'center', gap: 14,
-    padding: '14px 0', borderBottom: '1px solid var(--border-light)'
+    display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: '12px 14px',
+    padding: '16px 0', borderBottom: '1px solid var(--border-light)'
   }}>
-    <div style={{
-      width: 42, height: 42, borderRadius: 10,
-      background: 'var(--primary-light)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      color: 'var(--primary)', flexShrink: 0
-    }}>
-      <FiMap size={18} />
-    </div>
-    <div style={{ flex: 1, minWidth: 0 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 180, flex: 1 }}>
       <div style={{
-        fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)',
-        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+        width: 42, height: 42, borderRadius: 10,
+        background: 'var(--primary-light)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        color: 'var(--primary)', flexShrink: 0
       }}>
-        {trip.destination || 'Chuyến đi'}
+        <FiMap size={18} />
       </div>
-      <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: 2, display: 'flex', gap: 10 }}>
-        <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-          <FiMapPin size={10} /> {trip.tripId}
-        </span>
-        <span>{fmt(trip.totalBudget)} ₫</span>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          fontWeight: 600, fontSize: '0.95rem', color: 'var(--text-primary)',
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
+        }}>
+          {trip.destination || 'Chuyến đi'}
+        </div>
+        <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4, display: 'flex', flexWrap: 'wrap', gap: '4px 10px', alignItems: 'center' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap' }}>
+            <FiMapPin size={10} /> <span style={{ maxWidth: 85, overflow: 'hidden', textOverflow: 'ellipsis' }}>{trip.tripId}</span>
+          </span>
+          <span style={{ whiteSpace: 'nowrap', fontWeight: 600, color: 'var(--primary)' }}>{fmt(trip.totalBudget)} ₫</span>
+        </div>
       </div>
     </div>
-    <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+    <div style={{ display: 'flex', gap: 8, flexShrink: 0, marginLeft: 'auto' }}>
       <button
         onClick={() => onDelete(trip.tripId)}
         style={{
@@ -150,14 +152,14 @@ const PROMO_VIDEOS = [
 // ── Posters ────────────────────────────────────────────────────────────────
 const POSTERS = [
   { title: 'Khách sạn ở Bali', img: 'https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&w=400&q=80' },
-  { title: 'Khách sạn ở Bangkok', img: 'https://images.unsplash.com/photo-1508009603885-247a5b34bc25?auto=format&fit=crop&w=400&q=80' },
+  { title: 'Khách sạn ở Bangkok', img: 'https://longphutravel.com/uploads/gallery/bangkok-pattaya-2023/thai-lan-bangkok-pattaya-bay-thang-tu-tpho-chi-minh-longphutourist-00.jpg' },
   { title: 'Khách sạn ở Singapore', img: 'https://images.unsplash.com/photo-1525625293386-3f8f99389edd?auto=format&fit=crop&w=400&q=80' },
   { title: 'Khách sạn ở TP.Hồ Chí Minh', img: 'https://images.unsplash.com/photo-1583417319070-4a69db38a482?auto=format&fit=crop&w=400&q=80' },
   { title: 'Khách sạn ở Sydney', img: 'https://images.unsplash.com/photo-1506973035872-a4ec16b8e8d9?auto=format&fit=crop&w=400&q=80' },
   { title: 'Khách sạn ở Melbourne', img: 'https://images.unsplash.com/photo-1514395462725-fb4566210144?auto=format&fit=crop&w=400&q=80' },
-  { title: 'Khách sạn ở Vũng Tàu', img: 'https://images.unsplash.com/photo-1580979685954-52d3a94fb118?auto=format&fit=crop&w=400&q=80' },
+  { title: 'Khách sạn ở Vũng Tàu', img: 'https://homepage.momocdn.net/blogscontents/momo-upload-api-221013140622-638012667825895595.jpeg' },
   { title: 'Khách sạn ở Đà Lạt', img: 'https://images.unsplash.com/photo-1559592413-7cec4d0cae2b?auto=format&fit=crop&w=400&q=80' },
-  { title: 'Khách sạn ở Hà Nội', img: 'https://images.unsplash.com/photo-1599708153386-62bf3f034e62?auto=format&fit=crop&w=400&q=80' }
+  { title: 'Khách sạn ở Hà Nội', img: 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSjXo4pZZczFKB_i1fzxviT781yY3EqDtdqAQ&s' }
 ];
 
 // ── FAQs ───────────────────────────────────────────────────────────────────
@@ -314,7 +316,7 @@ const DashboardPage = () => {
           background: 'linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.1) 100%)',
           display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '30px 40px'
         }}>
-          <h2 style={{ color: '#fbbf24', fontSize: '1.8rem', fontWeight: 800, margin: '0 0 8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+          <h2 style={{ color: '#ffffffff', fontSize: '1.8rem', fontWeight: 800, margin: '0 0 8px', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
             Điểm đến tiếp theo của bạn? Lên kế hoạch giá tốt với <span style={{ color: 'var(--primary)' }}>Traplanner</span>
           </h2>
           <p style={{ color: 'rgba(255,255,255,0.9)', fontSize: '1.1rem', margin: 0, fontWeight: 500, textShadow: '0 1px 2px rgba(0,0,0,0.5)' }}>
@@ -651,13 +653,13 @@ const DashboardPage = () => {
                         }}>
                           🤖
                         </div>
-                        <h3 style={{ margin: 0, color: '#fff', fontSize: '1.3rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.6)' }}>TrapBot AI</h3>
+                        <h3 style={{ margin: 0, color: '#fff', fontSize: '1.3rem', fontWeight: 800, textShadow: '0 2px 4px rgba(0,0,0,0.6)' }}>Travel Bot AI</h3>
                       </div>
                       <p style={{ fontSize: '1.05rem', color: 'rgba(255,255,255,0.95)', lineHeight: 1.6, margin: '0 0 24px', textShadow: '0 1px 3px rgba(0,0,0,0.5)' }}>
                         Hỏi AI về lịch trình, địa điểm, chi phí và nhận gợi ý cá nhân hoá cho chuyến đi của bạn.
                       </p>
                       <button onClick={() => navigate('/chat')} className="btn-premium btn-primary" style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '14px', fontSize: '1rem', marginTop: 'auto' }}>
-                        <FiMessageSquare /> Mở TrapBot
+                        <FiMessageSquare /> Mở Travel Bot
                       </button>
                     </div>
                   </div>
@@ -700,7 +702,7 @@ const DashboardPage = () => {
 
           {currentView === 'posters' && (
             <div style={{ animation: 'fadeIn 0.4s ease-out' }}>
-              <h2 style={{ fontSize: '1.5rem', color: 'var(--primary)', margin: '0 0 20px', fontWeight: 800 }}>
+              <h2 style={{ fontSize: '1.5rem', color: 'var(--text-secondary)', margin: '0 0 20px', fontWeight: 800 }}>
                 Ưu đãi khách sạn tốt nhất tại các điểm đến phổ biến
               </h2>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20 }}>

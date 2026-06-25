@@ -27,8 +27,9 @@ class ScheduleItem(BaseModel):
     time_start: str = Field(description="HH:MM (e.g. 07:00)")
     time_end: str = Field(description="HH:MM (e.g. 08:00)")
     type: str = Field(description="transportation, activity, accommodation, meal, or rest")
-    name: str
-    location: str
+    name: str = Field(description="TÊN CHÍNH XÁC của địa điểm/nhà hàng từ Input Data")
+    locationId: Optional[str] = Field(default=None, description="Trường locationId lấy từ Input Data (bắt buộc phải có nếu địa điểm có trong database)")
+    location: str = Field(description="Địa chỉ hoặc vị trí")
     description: str = ""
     duration_minutes: int
     cost: int = 0
@@ -76,8 +77,10 @@ Nhiệm vụ: Sắp xếp các địa điểm đã được chọn thành một 
 3. Di chuyển liên tỉnh (Transportation): Nếu điểm xuất phát ({start_location}) khác điểm đến ({destination}), Bạn BẮT BUỘC PHẢI tạo hoạt động di chuyển (Xe khách, Tàu hỏa, Máy bay) làm HOẠT ĐỘNG ĐẦU TIÊN của Ngày 1 (từ {start_location} đến {destination}) và HOẠT ĐỘNG CUỐI CÙNG của Ngày cuối cùng (từ {destination} về {start_location}). Hãy tự ước lượng chi phí hợp lý (VD: Xe limousine 200000).
 4. Chỗ ở (Accommodation): SAU KHI di chuyển đến nơi, BẮT BUỘC tạo hoạt động "Check-in khách sạn: [Tên]" vào Ngày 1. Khách sạn phải lấy từ danh sách Accommodations. TUYỆT ĐỐI KHÔNG ĐỂ cost = 0. Bạn BẮT BUỘC phải lấy giá trị `cost` của khách sạn đó nhân với số đêm để gán vào trường `cost` của hoạt động Check-in này.
 5. Hoạt động (Activities): Phân bổ TẤT CẢ hoạt động được cung cấp vào các ngày sao cho hợp lý nhất. Đừng bỏ sót.
-6. Bữa ăn (Meals): Ưu tiên Quán ăn (Eateries) trong Input Data. BẮT BUỘC SỬ DỤNG TÊN CỤ THỂ của quán (VD: "Ăn trưa tại Mì Quảng Bà Mua").
-7. Chi phí & Hình ảnh: BẮT BUỘC lấy đúng `cost` và `img_url` của các activities/accommodations/eateries từ Input Data đưa vào Output. TUYỆT ĐỐI KHÔNG để trống `img_url` nếu Input Data có chứa nó.
+6. Bữa ăn (Meals): BẮT BUỘC CHỌN Quán ăn (Eateries) từ Input Data. TUYỆT ĐỐI KHÔNG ghi "Tự túc tìm quán ăn".
+   - Trường `name` BẮT BUỘC phải là TÊN CHÍNH XÁC CỦA QUÁN ĂN (VD: "Mì Quảng Bà Mua"). Không được đặt tên chung chung như "Ăn trưa" hay "Ăn tối".
+   - Trường `description` có thể ghi rõ là ăn sáng/trưa/tối.
+7. Dữ liệu gốc (Chi phí, Hình ảnh, ID): BẮT BUỘC copy chính xác `cost`, `img_url` và `locationId` của activities/accommodations/eateries từ Input Data sang Output. TUYỆT ĐỐI KHÔNG để trống `locationId` và `img_url` nếu Input có.
 8. TỔNG KẾT NGÀY (day_summary): Bạn BẮT BUỘC phải tạo object `day_summary` với các trường sau, không được bỏ sót:
    - `total_cost`: Tổng TẤT CẢ `cost` của các mục trong ngày. TUYỆT ĐỐI KHÔNG ĐỂ 0 nếu có chi phí.
    - `activities_count`, `meals_count`: Tổng số hoạt động và bữa ăn.

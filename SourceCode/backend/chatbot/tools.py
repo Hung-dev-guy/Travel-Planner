@@ -121,15 +121,18 @@ def search_alternative_hotels(destination: str, max_price_per_night: float = 200
 
     # Fetch directly from MongoDB Locations
     mongo_results = get_locations_by_category("Stay", destination, limit)
-    results = [
-        {
-            "name": loc.get("name", ""),
-            "address": loc.get("address", ""),
-            "price": loc.get("price_range", "Liên hệ"),
-            "description": loc.get("description", ""),
-        }
-        for loc in mongo_results
-    ]
+    results = []
+    for loc in mongo_results:
+        price = loc.get("estimatedPrice", 0)
+        if price <= max_price_per_night:
+            results.append({
+                "name": loc.get("name", ""),
+                "address": loc.get("address", loc.get("ward_name", "")),
+                "price": f"{price:,.0f} VNĐ" if price > 0 else loc.get("price_range", "Liên hệ"),
+                "description": loc.get("description", ""),
+            })
+            if len(results) >= limit:
+                break
 
     if not results:
         return [{"message": f"Không tìm thấy khách sạn phù hợp tại {destination} trong ngân sách."}]
@@ -159,15 +162,18 @@ def search_alternative_restaurants(destination: str, cuisine_type: str = "",
 
     category_key = cuisine_type if cuisine_type else "Food"
     mongo_results = get_locations_by_category(category_key, destination, limit)
-    results = [
-        {
-            "name": loc.get("name", ""),
-            "address": loc.get("address", ""),
-            "cuisine": cuisine_type or "Đa dạng",
-            "avg_price": loc.get("price_range", "Liên hệ"),
-        }
-        for loc in mongo_results
-    ]
+    results = []
+    for loc in mongo_results:
+        price = loc.get("estimatedPrice", 0)
+        if price <= max_price_per_person:
+            results.append({
+                "name": loc.get("name", ""),
+                "address": loc.get("address", loc.get("ward_name", "")),
+                "cuisine": cuisine_type or "Đa dạng",
+                "avg_price": f"{price:,.0f} VNĐ" if price > 0 else loc.get("price_range", "Liên hệ"),
+            })
+            if len(results) >= limit:
+                break
 
     if not results:
         return [{"message": f"Không tìm thấy nhà hàng phù hợp tại {destination}."}]
@@ -196,16 +202,18 @@ def search_alternative_attractions(destination: str, activity_type: str = "",
     mongo_results = get_locations_by_category(
         activity_type or "Activity", destination, limit
     )
-    results = [
-        {
+    results = []
+    for loc in mongo_results:
+        price = loc.get("estimatedPrice", 0)
+        results.append({
             "name": loc.get("name", ""),
-            "address": loc.get("address", ""),
+            "address": loc.get("address", loc.get("ward_name", "")),
             "type": activity_type or "Tham quan",
-            "entry_fee": loc.get("price_range", "Miễn phí"),
+            "entry_fee": f"{price:,.0f} VNĐ" if price > 0 else loc.get("price_range", "Miễn phí"),
             "description": loc.get("description", ""),
-        }
-        for loc in mongo_results
-    ]
+        })
+        if len(results) >= limit:
+            break
 
     if not results:
         return [{"message": f"Không tìm thấy địa điểm phù hợp tại {destination}."}]
@@ -461,14 +469,35 @@ def update_trip_activity(trip_id: str, day_number: int, old_activity_name: str, 
         new_activity_price: Chi phí ước tính (VNĐ)
     """
     logger.info(f"[Tool] update_trip_activity: {trip_id} day {day_number} - {old_activity_name} -> {new_activity_name}")
+    
+    # Auto-detect locationId from Locations collection
+    from .db import get_travel_db
+    db = get_travel_db()
+    
+    clean_name = new_activity_name
+    prefixes = ["Check-in ", "Ăn trưa tại ", "Ăn tối tại ", "Ăn sáng tại ", "Di chuyển đến ", "Thăm quan "]
+    for p in prefixes:
+        if clean_name.lower().startswith(p.lower()):
+            clean_name = clean_name[len(p):].strip()
+
+    loc = db["Locations"].find_one({"name": {"$regex": clean_name, "$options": "i"}})
+    location_id = loc.get("locationId", "") if loc else ""
+    image_url = loc.get("image_url", loc.get("image", "")) if loc else ""
+
     new_act = {
         "name": new_activity_name,
         "type": new_activity_type,
         "price": new_activity_price,
         "startTime": "", 
         "endTime": "",
-        "note": "Đã được cập nhật bởi TrapBot"
+        "note": "Đã được cập nhật bởi Travel Bot"
     }
+    
+    if location_id:
+        new_act["locationId"] = location_id
+    if image_url:
+        new_act["image"] = image_url
+
     success = update_activity_in_day(trip_id, day_number, old_activity_name, new_act)
     if success:
         return f"Thành công! Đã thay đổi '{old_activity_name}' thành '{new_activity_name}' trong Ngày {day_number}."
@@ -494,7 +523,7 @@ def add_new_activity(trip_id: str, day_number: int, activity_name: str, activity
         "price": activity_price,
         "startTime": start_time,
         "endTime": "",
-        "note": "Đã thêm bởi TrapBot"
+        "note": "Đã thêm bởi Travel Bot"
     }
     success = add_activity_to_day(trip_id, day_number, new_act)
     if success:
@@ -536,7 +565,7 @@ def update_transport_options(trip_id: str, day_number: int, old_transport: str, 
         "price": new_price,
         "startTime": "", 
         "endTime": "",
-        "note": "Đã cập nhật phương tiện bởi TrapBot"
+        "note": "Đã cập nhật phương tiện bởi Travel Bot"
     }
     success = update_activity_in_day(trip_id, day_number, old_transport, new_act)
     if success:
@@ -640,7 +669,7 @@ def direct_response(user_query: str, query_type: str = "general_chat") -> str:
 
     if query_type == "greeting":
         greetings = [
-            "Xin chào! 👋 Tôi là TrapBot – trợ lý du lịch AI của Traplanner. Tôi có thể giúp gì cho bạn về chuyến đi hôm nay?",
+            "Xin chào! 👋 Tôi là Travel Bot – trợ lý du lịch AI của Traplanner. Tôi có thể giúp gì cho bạn về chuyến đi hôm nay?",
             "Chào bạn! 😊 Rất vui được hỗ trợ bạn lên kế hoạch du lịch. Bạn cần tư vấn gì không?",
             "Xin chào! 🌏 Tôi sẵn sàng giúp bạn khám phá và tối ưu hành trình du lịch của mình!",
         ]
@@ -663,7 +692,7 @@ def direct_response(user_query: str, query_type: str = "general_chat") -> str:
 
     # Fallback – use Gemini
     resp = _call_gemini(
-        f"Bạn là TrapBot, trợ lý du lịch thân thiện. Trả lời ngắn gọn câu sau "
+        f"Bạn là Travel Bot, trợ lý du lịch thân thiện. Trả lời ngắn gọn câu sau "
         f"theo phong cách thân thiện, chuyên nghiệp:\n\"{user_query}\""
     )
     return resp or "Tôi có thể giúp gì thêm cho bạn về chuyến đi không? 😊"

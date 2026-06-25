@@ -13,14 +13,16 @@ const SearchPage = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [formData, setFormData] = useState({
     name: '', category: 'Stay', description: '', img_url: '', 
-    estimatedPrice: 0, ward_name: '', province_name: '', latitude: '', longitude: ''
+    estimatedPrice: 0, ward_name: '', province_name: '', latitude: '', longitude: '',
+    openingHours_open: '', openingHours_close: ''
   });
 
   // Trạng thái modal thêm phương tiện
   const [showAddTransportModal, setShowAddTransportModal] = useState(false);
   const [transportData, setTransportData] = useState({
-    from_city: '', to_city: '', type: 'xe khách',
-    provider: '', price: 0, duration_hours: 0, departure_times: ''
+    from_province: '', to_province: '', transportType: 'Coach',
+    provider: '', price: 0, estimatedDuration: '', 
+    distance_km: '', operatingHours_open: '', operatingHours_close: '', img_url: ''
   });
   
   // Dữ liệu dropdown
@@ -40,25 +42,30 @@ const SearchPage = () => {
     { id: 'Transport', label: 'Phương tiện' }
   ];
 
+  const fetchLocations = async () => {
+    setLoading(true);
+    try {
+      const res = await destinationService.getLocations(category, searchQuery);
+      setLocations(res.data.results || []);
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchLocations = async () => {
-      setLoading(true);
-      try {
-        const res = await destinationService.getLocations(category, searchQuery);
-        setLocations(res.data.results || []);
-      } catch (error) {
-        console.error("Error fetching locations:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    
     // Add a small debounce for search query
     const timeoutId = setTimeout(() => {
       fetchLocations();
     }, 300);
     
     return () => clearTimeout(timeoutId);
+  }, [category, searchQuery]);
+
+  useEffect(() => {
+    window.addEventListener('locationUpdated', fetchLocations);
+    return () => window.removeEventListener('locationUpdated', fetchLocations);
   }, [category, searchQuery]);
 
   // Load provinces khi mở modal
@@ -105,8 +112,9 @@ const SearchPage = () => {
       setShowAddTransportModal(false);
       // Reset form
       setTransportData({
-        from_city: '', to_city: '', type: 'xe khách',
-        provider: '', price: 0, duration_hours: 0, departure_times: ''
+        from_province: '', to_province: '', transportType: 'Coach',
+        provider: '', price: 0, estimatedDuration: '', 
+        distance_km: '', operatingHours_open: '', operatingHours_close: '', img_url: ''
       });
       // Optional refresh
       if (category === 'Transport' || category === 'All') {
@@ -221,7 +229,6 @@ const SearchPage = () => {
                     <option value="Stay">Khách sạn / Nơi ở</option>
                     <option value="Activity">Hoạt động tham quan</option>
                     <option value="Food">Quán ăn / Nhà hàng</option>
-                    <option value="Transport">Di chuyển / Phương tiện</option>
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
@@ -233,32 +240,28 @@ const SearchPage = () => {
               <div style={{ display: 'flex', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Tỉnh / Thành phố *</label>
-                  <select 
+                  <input 
+                    list="provinces-list"
                     className="input-field" 
                     required 
+                    placeholder="VD: Quảng Ninh"
                     value={formData.province_name} 
                     onChange={e => setFormData({...formData, province_name: e.target.value})}
-                  >
-                    <option value="" disabled>-- Chọn Tỉnh / Thành phố --</option>
-                    {provincesList.map(prov => (
-                      <option key={prov} value={prov}>{prov}</option>
-                    ))}
-                  </select>
+                  />
+
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Phường / Xã / Huyện *</label>
-                  <select 
+                  <input 
+                    list="wards-list"
                     className="input-field" 
                     required 
+                    placeholder="VD: Hạ Long"
                     value={formData.ward_name} 
                     onChange={e => setFormData({...formData, ward_name: e.target.value})}
                     disabled={!formData.province_name}
-                  >
-                    <option value="" disabled>-- Chọn Phường / Xã --</option>
-                    {wardsList.map(ward => (
-                      <option key={ward} value={ward}>{ward}</option>
-                    ))}
-                  </select>
+                  />
+
                 </div>
               </div>
               
@@ -276,6 +279,33 @@ const SearchPage = () => {
               <div>
                 <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Link hình ảnh</label>
                 <input type="text" className="input-field" placeholder="https://..." value={formData.img_url} onChange={e => setFormData({...formData, img_url: e.target.value})} />
+              </div>
+              
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Khung giờ hoạt động</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    className="input-field" 
+                    value={formData.openingHours_open} 
+                    onChange={e => setFormData({...formData, openingHours_open: e.target.value})}
+                  >
+                    <option value="">-- Từ giờ --</option>
+                    {Array.from({length: 24}).map((_, i) => (
+                      <option key={i} value={`${i.toString().padStart(2, '0')}:00`}>{`${i.toString().padStart(2, '0')}:00`}</option>
+                    ))}
+                  </select>
+                  <span>-</span>
+                  <select 
+                    className="input-field" 
+                    value={formData.openingHours_close} 
+                    onChange={e => setFormData({...formData, openingHours_close: e.target.value})}
+                  >
+                    <option value="">-- Đến giờ --</option>
+                    {Array.from({length: 24}).map((_, i) => (
+                      <option key={i} value={`${i.toString().padStart(2, '0')}:00`}>{`${i.toString().padStart(2, '0')}:00`}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
               
               <div>
@@ -308,22 +338,42 @@ const SearchPage = () => {
               <div style={{ display: 'flex', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Thành phố đi *</label>
-                  <input type="text" className="input-field" required placeholder="VD: Hà Nội" value={transportData.from_city} onChange={e => setTransportData({...transportData, from_city: e.target.value})} />
+                  <select 
+                    className="input-field" 
+                    required 
+                    value={transportData.from_province} 
+                    onChange={e => setTransportData({...transportData, from_province: e.target.value})}
+                  >
+                    <option value="" disabled>-- Chọn Thành phố --</option>
+                    {provincesList.map(prov => (
+                      <option key={prov} value={prov}>{prov}</option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Thành phố đến *</label>
-                  <input type="text" className="input-field" required placeholder="VD: Đà Nẵng" value={transportData.to_city} onChange={e => setTransportData({...transportData, to_city: e.target.value})} />
+                  <select 
+                    className="input-field" 
+                    required 
+                    value={transportData.to_province} 
+                    onChange={e => setTransportData({...transportData, to_province: e.target.value})}
+                  >
+                    <option value="" disabled>-- Chọn Thành phố --</option>
+                    {provincesList.map(prov => (
+                      <option key={prov} value={prov}>{prov}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               
               <div style={{ display: 'flex', gap: '16px' }}>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Loại phương tiện *</label>
-                  <select className="input-field" value={transportData.type} onChange={e => setTransportData({...transportData, type: e.target.value})}>
-                    <option value="máy bay">Máy bay</option>
-                    <option value="tàu hỏa">Tàu hỏa</option>
-                    <option value="xe khách">Xe khách</option>
-                    <option value="xe limousine">Xe Limousine</option>
+                  <select className="input-field" value={transportData.transportType} onChange={e => setTransportData({...transportData, transportType: e.target.value})}>
+                    <option value="Flight">Máy bay</option>
+                    <option value="Train">Tàu hỏa</option>
+                    <option value="Coach">Xe khách</option>
+                    <option value="Limousine">Xe Limousine</option>
                   </select>
                 </div>
                 <div style={{ flex: 1 }}>
@@ -339,13 +389,67 @@ const SearchPage = () => {
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Thời gian di chuyển (giờ)</label>
-                  <input type="number" step="0.5" className="input-field" value={transportData.duration_hours} onChange={e => setTransportData({...transportData, duration_hours: e.target.value})} />
+                  <select 
+                    className="input-field" 
+                    value={transportData.estimatedDuration} 
+                    onChange={e => setTransportData({...transportData, estimatedDuration: e.target.value})}
+                  >
+                    <option value="" disabled>-- Chọn thời gian --</option>
+                    {Array.from({length: 48}).map((_, i) => {
+                      const val = (i + 1) * 0.5;
+                      return <option key={val} value={val}>{val} giờ</option>;
+                    })}
+                  </select>
                 </div>
               </div>
               
+              <div style={{ display: 'flex', gap: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Khoảng cách (km) *</label>
+                  <input type="number" step="0.1" className="input-field" required value={transportData.distance_km} onChange={e => setTransportData({...transportData, distance_km: e.target.value})} />
+                </div>
+                <div style={{ flex: 1 }}>
+                </div>
+              </div>
+
               <div>
-                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Giờ khởi hành (nếu có)</label>
-                <input type="text" className="input-field" placeholder="VD: 08:00, 14:30, 22:00..." value={transportData.departure_times} onChange={e => setTransportData({...transportData, departure_times: e.target.value})} />
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Khung giờ hoạt động *</label>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <select 
+                    className="input-field" 
+                    required 
+                    value={transportData.operatingHours_open} 
+                    onChange={e => setTransportData({...transportData, operatingHours_open: e.target.value})}
+                  >
+                    <option value="" disabled>-- Từ giờ --</option>
+                    {Array.from({length: 24}).map((_, i) => (
+                      <option key={i} value={`${i.toString().padStart(2, '0')}:00`}>{`${i.toString().padStart(2, '0')}:00`}</option>
+                    ))}
+                  </select>
+                  <span>-</span>
+                  <select 
+                    className="input-field" 
+                    required 
+                    value={transportData.operatingHours_close} 
+                    onChange={e => setTransportData({...transportData, operatingHours_close: e.target.value})}
+                  >
+                    <option value="" disabled>-- Đến giờ --</option>
+                    {Array.from({length: 24}).map((_, i) => (
+                      <option key={i} value={`${i.toString().padStart(2, '0')}:00`}>{`${i.toString().padStart(2, '0')}:00`}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: 'block', marginBottom: '8px', fontWeight: 500 }}>Link hình ảnh</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="https://..." 
+                  value={transportData.img_url} 
+                  onChange={e => setTransportData({...transportData, img_url: e.target.value})} 
+                />
               </div>
               
               <button type="submit" className="btn-premium btn-primary" style={{ marginTop: '10px' }}>Lưu tuyến phương tiện</button>
@@ -353,6 +457,18 @@ const SearchPage = () => {
           </div>
         </div>
       )}
+      
+      {/* Shared Datalists for both modals */}
+      <datalist id="provinces-list">
+        {provincesList.map((prov, i) => (
+          <option key={`${prov}-${i}`} value={prov} />
+        ))}
+      </datalist>
+      <datalist id="wards-list">
+        {wardsList.map((ward, i) => (
+          <option key={`${ward}-${i}`} value={ward} />
+        ))}
+      </datalist>
     </div>
   );
 };

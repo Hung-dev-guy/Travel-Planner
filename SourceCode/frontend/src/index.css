@@ -28,7 +28,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background-color: var(--bg-main);
-  background-image: linear-gradient(var(--bg-overlay-start), var(--bg-overlay-end)), url('./assets/images/amalfi.jpg');
+  background-image: linear-gradient(var(--bg-overlay-start), var(--bg-overlay-end)), url('/tphcm.png');
   background-size: cover;
   background-position: center;
   background-attachment: fixed;

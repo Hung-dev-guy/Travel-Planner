@@ -48,7 +48,7 @@ const Navbar = () => {
   return (
     <>
       <nav
-        style={{ 
+        style={{
           background: 'var(--bg-main)', borderBottom: '1px solid var(--border-light)', position: 'sticky', top: 0, zIndex: 100, boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
           animation: 'navFadeIn 0.6s ease-out forwards'
         }}
@@ -213,11 +213,7 @@ const Navbar = () => {
         `}</style>
         <div style={{
           background: 'var(--bg-main)',
-          maxHeight: isNavHovered ? '80px' : '0',
-          opacity: isNavHovered ? 1 : 0,
-          overflow: 'hidden',
-          transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
-          borderTop: isNavHovered ? '1px solid var(--border-light)' : '0px solid transparent'
+          borderTop: '1px solid var(--border-light)'
         }}>
           <div style={{ display: 'flex', gap: '20px', padding: '12px 24px', maxWidth: 1200, margin: '0 auto', overflowX: 'auto', alignItems: 'center' }}>
             <Link to="/dashboard" className="nav-link-bottom">

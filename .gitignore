@@ -112,3 +112,7 @@ docs/_build/
 # Testing
 .tox/
 .hypothesis/
+
+# Custom Exclusions
+SourceCode/backend/workflow/test/
+SourceCode/backend/.env
